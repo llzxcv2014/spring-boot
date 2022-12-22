@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.function.Consumer;
 
+import com.sun.jna.Platform;
+
 import org.springframework.boot.buildpack.platform.docker.DockerApi;
 import org.springframework.boot.buildpack.platform.docker.LogUpdateEvent;
+import org.springframework.boot.buildpack.platform.docker.configuration.ResolvedDockerHost;
 import org.springframework.boot.buildpack.platform.docker.type.Binding;
 import org.springframework.boot.buildpack.platform.docker.type.ContainerConfig;
 import org.springframework.boot.buildpack.platform.docker.type.ContainerContent;
@@ -39,6 +42,7 @@ import org.springframework.util.Assert;
  * @author Phillip Webb
  * @author Scott Frederick
  * @author Jeroen Meijer
+ * @author Julian Liebig
  */
 class Lifecycle implements Closeable {
 
@@ -46,9 +50,13 @@ class Lifecycle implements Closeable {
 
 	private static final String PLATFORM_API_VERSION_KEY = "CNB_PLATFORM_API";
 
+	private static final String DOMAIN_SOCKET_PATH = "/var/run/docker.sock";
+
 	private final BuildLog log;
 
 	private final DockerApi docker;
+
+	private final ResolvedDockerHost dockerHost;
 
 	private final BuildRequest request;
 
@@ -74,28 +82,52 @@ class Lifecycle implements Closeable {
 	 * Create a new {@link Lifecycle} instance.
 	 * @param log build output log
 	 * @param docker the Docker API
+	 * @param dockerHost the Docker host information
 	 * @param request the request to process
 	 * @param builder the ephemeral builder used to run the phases
 	 */
-	Lifecycle(BuildLog log, DockerApi docker, BuildRequest request, EphemeralBuilder builder) {
+	Lifecycle(BuildLog log, DockerApi docker, ResolvedDockerHost dockerHost, BuildRequest request,
+			EphemeralBuilder builder) {
 		this.log = log;
 		this.docker = docker;
+		this.dockerHost = dockerHost;
 		this.request = request;
 		this.builder = builder;
 		this.lifecycleVersion = LifecycleVersion.parse(builder.getBuilderMetadata().getLifecycle().getVersion());
 		this.platformVersion = getPlatformVersion(builder.getBuilderMetadata().getLifecycle());
 		this.layersVolume = createRandomVolumeName("pack-layers-");
 		this.applicationVolume = createRandomVolumeName("pack-app-");
-		this.buildCacheVolume = createCacheVolumeName(request, ".build");
-		this.launchCacheVolume = createCacheVolumeName(request, ".launch");
+		this.buildCacheVolume = getBuildCacheVolumeName(request);
+		this.launchCacheVolume = getLaunchCacheVolumeName(request);
 	}
 
 	protected VolumeName createRandomVolumeName(String prefix) {
 		return VolumeName.random(prefix);
 	}
 
+	private VolumeName getBuildCacheVolumeName(BuildRequest request) {
+		if (request.getBuildCache() != null) {
+			return getVolumeName(request.getBuildCache());
+		}
+		return createCacheVolumeName(request, "build");
+	}
+
+	private VolumeName getLaunchCacheVolumeName(BuildRequest request) {
+		if (request.getLaunchCache() != null) {
+			return getVolumeName(request.getLaunchCache());
+		}
+		return createCacheVolumeName(request, "launch");
+	}
+
+	private VolumeName getVolumeName(Cache cache) {
+		if (cache.getVolume() != null) {
+			return VolumeName.of(cache.getVolume().getName());
+		}
+		return null;
+	}
+
 	private VolumeName createCacheVolumeName(BuildRequest request, String suffix) {
-		return VolumeName.basedOn(request.getName(), ImageReference::toLegacyString, "pack-cache-", suffix, 6);
+		return VolumeName.basedOn(request.getName(), ImageReference::toLegacyString, "pack-cache-", "." + suffix, 6);
 	}
 
 	private ApiVersion getPlatformVersion(BuilderMetadata.Lifecycle lifecycle) {
@@ -125,6 +157,7 @@ class Lifecycle implements Closeable {
 	private Phase createPhase() {
 		Phase phase = new Phase("creator", isVerboseLogging());
 		phase.withDaemonAccess();
+		configureDaemonAccess(phase);
 		phase.withLogLevelArg();
 		phase.withArgs("-app", Directory.APPLICATION);
 		phase.withArgs("-platform", Directory.PLATFORM);
@@ -154,12 +187,33 @@ class Lifecycle implements Closeable {
 		return phase;
 	}
 
+	private void configureDaemonAccess(Phase phase) {
+		if (this.dockerHost != null) {
+			if (this.dockerHost.isRemote()) {
+				phase.withEnv("DOCKER_HOST", this.dockerHost.getAddress());
+				if (this.dockerHost.isSecure()) {
+					phase.withEnv("DOCKER_TLS_VERIFY", "1");
+					phase.withEnv("DOCKER_CERT_PATH", this.dockerHost.getCertificatePath());
+				}
+			}
+			else {
+				phase.withBinding(Binding.from(this.dockerHost.getAddress(), DOMAIN_SOCKET_PATH));
+			}
+		}
+		else {
+			phase.withBinding(Binding.from(DOMAIN_SOCKET_PATH, DOMAIN_SOCKET_PATH));
+		}
+		if (!Platform.isWindows()) {
+			phase.withSecurityOption("label=disable");
+		}
+	}
+
 	private boolean isVerboseLogging() {
 		return this.request.isVerboseLogging() && this.lifecycleVersion.isEqualOrGreaterThan(LOGGING_MINIMUM_VERSION);
 	}
 
 	private boolean requiresProcessTypeDefault() {
-		return this.platformVersion.supports(ApiVersion.of(0, 4));
+		return this.platformVersion.supportsAny(ApiVersion.of(0, 4), ApiVersion.of(0, 5));
 	}
 
 	private void run(Phase phase) throws IOException {

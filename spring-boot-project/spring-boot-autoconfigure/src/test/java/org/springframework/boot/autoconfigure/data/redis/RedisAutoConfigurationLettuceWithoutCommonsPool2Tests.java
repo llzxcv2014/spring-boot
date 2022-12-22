@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ class RedisAutoConfigurationLettuceWithoutCommonsPool2Tests {
 
 	@Test
 	void poolWithoutCommonsPool2IsDisabledByDefault() {
-		this.contextRunner.withPropertyValues("spring.redis.host:foo").run((context) -> {
+		this.contextRunner.withPropertyValues("spring.data.redis.host:foo").run((context) -> {
 			LettuceConnectionFactory cf = context.getBean(LettuceConnectionFactory.class);
 			assertThat(cf.getHostName()).isEqualTo("foo");
 			assertThat(cf.getClientConfiguration()).isNotInstanceOf(LettucePoolingClientConfiguration.class);

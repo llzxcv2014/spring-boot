@@ -1,5 +1,5 @@
 [[upgrading.to-feature]]
-== Upgrading to a new feature release
+== Upgrading to a New Feature Release
 
 When upgrading to a new feature release, some properties may have been renamed or removed.
 Spring Boot provides a way to analyze your application's environment and print diagnostics at startup, but also temporarily migrate properties at runtime for you.
@@ -16,4 +16,4 @@ To enable that feature, add the following dependency to your project:
 
 WARNING: Properties that are added late to the environment, such as when using `@PropertySource`, will not be taken into account.
 
-NOTE: Once you're done with the migration, please make sure to remove this module from your project's dependencies.
+NOTE: Once you finish the migration, please make sure to remove this module from your project's dependencies.

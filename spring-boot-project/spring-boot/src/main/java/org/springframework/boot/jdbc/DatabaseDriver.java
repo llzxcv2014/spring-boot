@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ public enum DatabaseDriver {
 			"SELECT COUNT(*) FROM INFORMATION_SCHEMA.SYSTEM_USERS"),
 
 	/**
-	 * SQL Lite.
+	 * SQLite.
 	 */
 	SQLITE("SQLite", "org.sqlite.JDBC"),
 
@@ -74,18 +74,7 @@ public enum DatabaseDriver {
 	/**
 	 * Maria DB.
 	 */
-	MARIADB("MariaDB", "org.mariadb.jdbc.Driver", "org.mariadb.jdbc.MariaDbDataSource", "SELECT 1") {
-
-		@Override
-		public String getId() {
-			return "mysql";
-		}
-	},
-
-	/**
-	 * Google App Engine.
-	 */
-	GAE(null, "com.google.appengine.api.rdbms.AppEngineDriver"),
+	MARIADB("MariaDB", "org.mariadb.jdbc.Driver", "org.mariadb.jdbc.MariaDbDataSource", "SELECT 1"),
 
 	/**
 	 * Oracle.

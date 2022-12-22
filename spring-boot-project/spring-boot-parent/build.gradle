@@ -27,6 +27,13 @@ bom {
 			]
 		}
 	}
+	library("C3P0", "0.9.5.5") {
+		group("com.mchange") {
+			modules = [
+					"c3p0"
+			]
+		}
+	}
 	library("Commons Compress", "1.21") {
 		group("org.apache.commons") {
 			modules = [
@@ -38,6 +45,20 @@ bom {
 		group("commons-fileupload") {
 			modules = [
 				"commons-fileupload"
+			]
+		}
+	}
+	library("Jakarta Inject", "2.0.1") {
+		group("jakarta.inject") {
+			modules = [
+				"jakarta.inject-api"
+			]
+		}
+	}
+	library("Janino", "3.1.8") {
+		group("org.codehaus.janino") {
+			imports = [
+				"janino"
 			]
 		}
 	}
@@ -95,13 +116,16 @@ bom {
 			]
 		}
 	}
-	library("Maven Resolver", "1.6.1") {
+	library("Maven Resolver", "1.6.3") {
 		group("org.apache.maven.resolver") {
 			modules = [
+				"maven-resolver-api",
 				"maven-resolver-connector-basic",
 				"maven-resolver-impl",
+				"maven-resolver-spi",
 				"maven-resolver-transport-file",
-				"maven-resolver-transport-http"
+				"maven-resolver-transport-http",
+				"maven-resolver-util"
 			]
 		}
 	}
@@ -119,6 +143,13 @@ bom {
 			]
 		}
 	}
+	library("Native Gradle Plugin", "${nativeBuildToolsVersion}") {
+		group("org.graalvm.buildtools") {
+			modules = [
+				"native-gradle-plugin"
+			]
+		}
+	}
 	library("Plexus Build API", "0.0.7") {
 		group("org.sonatype.plexus") {
 			modules = [
@@ -133,6 +164,13 @@ bom {
 			]
 		}
 	}
+	library("Simple JNDI", "0.23.0") {
+		group("com.github.h-thurow") {
+			modules = [
+				"simple-jndi"
+			]
+		}
+	}
 	library("Sisu", "2.6.0") {
 		group("org.sonatype.sisu") {
 			modules = [
@@ -140,11 +178,10 @@ bom {
 			]
 		}
 	}
-	library("Spock Framework", "2.0-groovy-3.0") {
+	library("Spock Framework", "2.2-M1-groovy-4.0") {
 		group("org.spockframework") {
-			modules = [
-				"spock-core",
-				"spock-spring"
+			imports = [
+				"spock-bom"
 			]
 		}
 	}
@@ -163,7 +200,7 @@ bom {
 			]
 		}
 	}
-	library("Testcontainers", "1.16.0") {
+	library("Testcontainers", "1.17.3") {
 		group("org.testcontainers") {
 			imports = [
 				"testcontainers-bom"
@@ -174,4 +211,9 @@ bom {
 
 dependencies {
 	api(enforcedPlatform(project(":spring-boot-project:spring-boot-dependencies")))
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+	// Internal module so enforced platform dependencies are OK
+	suppressedValidationErrors.add('enforced-platform')
 }

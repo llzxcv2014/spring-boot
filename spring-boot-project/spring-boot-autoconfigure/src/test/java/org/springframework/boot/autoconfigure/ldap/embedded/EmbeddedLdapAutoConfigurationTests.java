@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,6 +175,15 @@ class EmbeddedLdapAutoConfigurationTests {
 				.withClassLoader(new FilteredClassLoader(ContextSource.class)).run((context) -> {
 					assertThat(context).hasNotFailed();
 					assertThat(context).doesNotHaveBean(LdapContextSource.class);
+				});
+	}
+
+	@Test
+	void ldapContextIsCreatedWithBase() {
+		this.contextRunner.withPropertyValues("spring.ldap.embedded.base-dn:dc=spring,dc=org",
+				"spring.ldap.base:dc=spring,dc=org").run((context) -> {
+					LdapContextSource ldapContextSource = context.getBean(LdapContextSource.class);
+					assertThat(ldapContextSource.getBaseLdapPathAsString()).isEqualTo("dc=spring,dc=org");
 				});
 	}
 

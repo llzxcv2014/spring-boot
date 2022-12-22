@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import java.util.function.Predicate;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -68,8 +69,10 @@ public class CheckClasspathForConflicts extends DefaultTask {
 		for (File file : this.classpath) {
 			if (file.isDirectory()) {
 				Path root = file.toPath();
-				Files.walk(root).filter((path) -> Files.isRegularFile(path))
-						.forEach((entry) -> classpathContents.add(root.relativize(entry).toString(), root.toString()));
+				try (Stream<Path> pathStream = Files.walk(root)) {
+					pathStream.filter(Files::isRegularFile).forEach(
+							(entry) -> classpathContents.add(root.relativize(entry).toString(), root.toString()));
+				}
 			}
 			else {
 				try (JarFile jar = new JarFile(file)) {

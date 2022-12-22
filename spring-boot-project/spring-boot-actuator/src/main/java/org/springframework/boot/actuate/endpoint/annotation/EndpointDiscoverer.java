@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ public abstract class EndpointDiscoverer<E extends ExposableEndpoint<O>, O exten
 
 	private DiscoveredOperationsFactory<O> getOperationsFactory(ParameterValueMapper parameterValueMapper,
 			Collection<OperationInvokerAdvisor> invokerAdvisors) {
-		return new DiscoveredOperationsFactory<O>(parameterValueMapper, invokerAdvisors) {
+		return new DiscoveredOperationsFactory<>(parameterValueMapper, invokerAdvisors) {
 
 			@Override
 			protected O createOperation(EndpointId endpointId, DiscoveredOperationMethod operationMethod,
@@ -199,8 +199,7 @@ public abstract class EndpointDiscoverer<E extends ExposableEndpoint<O>, O exten
 			addOperations(indexed, id, extensionBean.getBean(), true);
 		}
 		assertNoDuplicateOperations(endpointBean, indexed);
-		List<O> operations = indexed.values().stream().map(this::getLast).filter(Objects::nonNull)
-				.collect(Collectors.collectingAndThen(Collectors.toList(), Collections::unmodifiableList));
+		List<O> operations = indexed.values().stream().map(this::getLast).filter(Objects::nonNull).toList();
 		return createEndpoint(endpointBean.getBean(), id, endpointBean.isEnabledByDefault(), operations);
 	}
 
@@ -224,7 +223,7 @@ public abstract class EndpointDiscoverer<E extends ExposableEndpoint<O>, O exten
 
 	private void assertNoDuplicateOperations(EndpointBean endpointBean, MultiValueMap<OperationKey, O> indexed) {
 		List<OperationKey> duplicates = indexed.entrySet().stream().filter((entry) -> entry.getValue().size() > 1)
-				.map(Map.Entry::getKey).collect(Collectors.toList());
+				.map(Map.Entry::getKey).toList();
 		if (!duplicates.isEmpty()) {
 			Set<ExtensionBean> extensions = endpointBean.getExtensions();
 			String extensionBeanNames = extensions.stream().map(ExtensionBean::getBeanName)
@@ -357,7 +356,7 @@ public abstract class EndpointDiscoverer<E extends ExposableEndpoint<O>, O exten
 		/**
 		 * Create a new {@link OperationKey} instance.
 		 * @param key the underlying key for the operation
-		 * @param description a human readable description of the key
+		 * @param description a human-readable description of the key
 		 */
 		public OperationKey(Object key, Supplier<String> description) {
 			Assert.notNull(key, "Key must not be null");
@@ -402,11 +401,11 @@ public abstract class EndpointDiscoverer<E extends ExposableEndpoint<O>, O exten
 
 		private final EndpointId id;
 
-		private boolean enabledByDefault;
+		private final boolean enabledByDefault;
 
 		private final Class<?> filter;
 
-		private Set<ExtensionBean> extensions = new LinkedHashSet<>();
+		private final Set<ExtensionBean> extensions = new LinkedHashSet<>();
 
 		EndpointBean(Environment environment, String beanName, Class<?> beanType, Supplier<Object> beanSupplier) {
 			MergedAnnotation<Endpoint> annotation = MergedAnnotations.from(beanType, SearchStrategy.TYPE_HIERARCHY)

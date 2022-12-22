@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.bind.PlaceholdersResolver;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.PropertySource;
@@ -34,8 +35,8 @@ import org.springframework.util.CollectionUtils;
 
 /**
  * A single element that may directly or indirectly contribute configuration data to the
- * {@link Environment}. There are several different {@link Kind kinds} of contributor, all
- * are immutable and will be replaced with new versions as imports are processed.
+ * {@link Environment}. There are several {@link Kind kinds} of contributor, all are
+ * immutable and will be replaced with new versions as imports are processed.
  * <p>
  * Contributors may provide a set of imports that should be processed and ultimately
  * turned into children. There are two distinct import phases:
@@ -120,6 +121,9 @@ class ConfigDataEnvironmentContributor implements Iterable<ConfigDataEnvironment
 	 * @return if the contributor is active
 	 */
 	boolean isActive(ConfigDataActivationContext activationContext) {
+		if (this.kind == Kind.UNBOUND_IMPORT) {
+			return false;
+		}
 		return this.properties == null || this.properties.isActive(activationContext);
 	}
 
@@ -221,13 +225,18 @@ class ConfigDataEnvironmentContributor implements Iterable<ConfigDataEnvironment
 	}
 
 	/**
-	 * Create an new {@link ConfigDataEnvironmentContributor} with bound
+	 * Create a new {@link ConfigDataEnvironmentContributor} with bound
 	 * {@link ConfigDataProperties}.
-	 * @param binder the binder to use
+	 * @param contributors the contributors used for binding
+	 * @param activationContext the activation context
 	 * @return a new contributor instance
 	 */
-	ConfigDataEnvironmentContributor withBoundProperties(Binder binder) {
-		UseLegacyConfigProcessingException.throwIfRequested(binder);
+	ConfigDataEnvironmentContributor withBoundProperties(Iterable<ConfigDataEnvironmentContributor> contributors,
+			ConfigDataActivationContext activationContext) {
+		Iterable<ConfigurationPropertySource> sources = Collections.singleton(getConfigurationPropertySource());
+		PlaceholdersResolver placeholdersResolver = new ConfigDataEnvironmentContributorPlaceholdersResolver(
+				contributors, activationContext, this, true);
+		Binder binder = new Binder(sources, placeholdersResolver, null, null, null);
 		ConfigDataProperties properties = ConfigDataProperties.get(binder);
 		if (properties != null && this.configDataOptions.contains(ConfigData.Option.IGNORE_IMPORTS)) {
 			properties = properties.withoutImports();
@@ -305,7 +314,7 @@ class ConfigDataEnvironmentContributor implements Iterable<ConfigDataEnvironment
 	}
 
 	/**
-	 * Create a new {@link ConfigDataEnvironmentContributor} instance where a existing
+	 * Create a new {@link ConfigDataEnvironmentContributor} instance where an existing
 	 * child is replaced.
 	 * @param existing the existing node that should be replaced
 	 * @param replacement the replacement node that should be used instead

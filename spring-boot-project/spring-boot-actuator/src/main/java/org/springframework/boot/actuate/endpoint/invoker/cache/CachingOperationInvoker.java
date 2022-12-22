@@ -18,18 +18,25 @@ package org.springframework.boot.actuate.endpoint.invoker.cache;
 
 import java.security.Principal;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.boot.actuate.endpoint.ApiVersion;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
+import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.invoke.OperationInvoker;
+import org.springframework.boot.actuate.endpoint.invoke.OperationParameter;
+import org.springframework.boot.actuate.endpoint.invoke.OperationParameters;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.util.ObjectUtils;
 
 /**
@@ -44,6 +51,8 @@ import org.springframework.util.ObjectUtils;
 public class CachingOperationInvoker implements OperationInvoker {
 
 	private static final boolean IS_REACTOR_PRESENT = ClassUtils.isPresent("reactor.core.publisher.Mono", null);
+
+	private static final int CACHE_CLEANUP_THRESHOLD = 40;
 
 	private final OperationInvoker invoker;
 
@@ -61,7 +70,7 @@ public class CachingOperationInvoker implements OperationInvoker {
 		Assert.isTrue(timeToLive > 0, "TimeToLive must be strictly positive");
 		this.invoker = invoker;
 		this.timeToLive = timeToLive;
-		this.cachedResponses = new ConcurrentHashMap<>();
+		this.cachedResponses = new ConcurrentReferenceHashMap<>();
 	}
 
 	/**
@@ -78,9 +87,10 @@ public class CachingOperationInvoker implements OperationInvoker {
 			return this.invoker.invoke(context);
 		}
 		long accessTime = System.currentTimeMillis();
-		ApiVersion contextApiVersion = context.resolveArgument(ApiVersion.class);
-		Principal principal = context.resolveArgument(Principal.class);
-		CacheKey cacheKey = new CacheKey(contextApiVersion, principal);
+		if (this.cachedResponses.size() > CACHE_CLEANUP_THRESHOLD) {
+			cleanExpiredCachedResponses(accessTime);
+		}
+		CacheKey cacheKey = getCacheKey(context);
 		CachedResponse cached = this.cachedResponses.get(cacheKey);
 		if (cached == null || cached.isStale(accessTime, this.timeToLive)) {
 			Object response = this.invoker.invoke(context);
@@ -88,6 +98,27 @@ public class CachingOperationInvoker implements OperationInvoker {
 			this.cachedResponses.put(cacheKey, cached);
 		}
 		return cached.getResponse();
+	}
+
+	private CacheKey getCacheKey(InvocationContext context) {
+		ApiVersion contextApiVersion = context.resolveArgument(ApiVersion.class);
+		Principal principal = context.resolveArgument(Principal.class);
+		WebServerNamespace serverNamespace = context.resolveArgument(WebServerNamespace.class);
+		return new CacheKey(contextApiVersion, principal, serverNamespace);
+	}
+
+	private void cleanExpiredCachedResponses(long accessTime) {
+		try {
+			Iterator<Entry<CacheKey, CachedResponse>> iterator = this.cachedResponses.entrySet().iterator();
+			while (iterator.hasNext()) {
+				Entry<CacheKey, CachedResponse> entry = iterator.next();
+				if (entry.getValue().isStale(accessTime, this.timeToLive)) {
+					iterator.remove();
+				}
+			}
+		}
+		catch (Exception ex) {
+		}
 	}
 
 	private boolean hasInput(InvocationContext context) {
@@ -103,6 +134,15 @@ public class CachingOperationInvoker implements OperationInvoker {
 			return new ReactiveCachedResponse(response, accessTime, this.timeToLive);
 		}
 		return new CachedResponse(response, accessTime);
+	}
+
+	static boolean isApplicable(OperationParameters parameters) {
+		for (OperationParameter parameter : parameters) {
+			if (parameter.isMandatory() && !CacheKey.containsType(parameter.getType())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -153,13 +193,23 @@ public class CachingOperationInvoker implements OperationInvoker {
 
 	private static final class CacheKey {
 
+		private static final Class<?>[] CACHEABLE_TYPES = new Class<?>[] { ApiVersion.class, SecurityContext.class,
+				WebServerNamespace.class };
+
 		private final ApiVersion apiVersion;
 
 		private final Principal principal;
 
-		private CacheKey(ApiVersion apiVersion, Principal principal) {
+		private final WebServerNamespace serverNamespace;
+
+		private CacheKey(ApiVersion apiVersion, Principal principal, WebServerNamespace serverNamespace) {
 			this.principal = principal;
 			this.apiVersion = apiVersion;
+			this.serverNamespace = serverNamespace;
+		}
+
+		static boolean containsType(Class<?> type) {
+			return Arrays.stream(CacheKey.CACHEABLE_TYPES).anyMatch((c) -> c.isAssignableFrom(type));
 		}
 
 		@Override
@@ -172,7 +222,8 @@ public class CachingOperationInvoker implements OperationInvoker {
 			}
 			CacheKey other = (CacheKey) obj;
 			return this.apiVersion.equals(other.apiVersion)
-					&& ObjectUtils.nullSafeEquals(this.principal, other.principal);
+					&& ObjectUtils.nullSafeEquals(this.principal, other.principal)
+					&& ObjectUtils.nullSafeEquals(this.serverNamespace, other.serverNamespace);
 		}
 
 		@Override
@@ -181,6 +232,7 @@ public class CachingOperationInvoker implements OperationInvoker {
 			int result = 1;
 			result = prime * result + this.apiVersion.hashCode();
 			result = prime * result + ObjectUtils.nullSafeHashCode(this.principal);
+			result = prime * result + ObjectUtils.nullSafeHashCode(this.serverNamespace);
 			return result;
 		}
 

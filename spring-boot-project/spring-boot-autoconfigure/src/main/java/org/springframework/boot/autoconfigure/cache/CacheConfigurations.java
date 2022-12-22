@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,13 +36,13 @@ final class CacheConfigurations {
 	static {
 		Map<CacheType, String> mappings = new EnumMap<>(CacheType.class);
 		mappings.put(CacheType.GENERIC, GenericCacheConfiguration.class.getName());
-		mappings.put(CacheType.EHCACHE, EhCacheCacheConfiguration.class.getName());
 		mappings.put(CacheType.HAZELCAST, HazelcastCacheConfiguration.class.getName());
 		mappings.put(CacheType.INFINISPAN, InfinispanCacheConfiguration.class.getName());
 		mappings.put(CacheType.JCACHE, JCacheCacheConfiguration.class.getName());
 		mappings.put(CacheType.COUCHBASE, CouchbaseCacheConfiguration.class.getName());
 		mappings.put(CacheType.REDIS, RedisCacheConfiguration.class.getName());
 		mappings.put(CacheType.CAFFEINE, CaffeineCacheConfiguration.class.getName());
+		mappings.put(CacheType.CACHE2K, Cache2kCacheConfiguration.class.getName());
 		mappings.put(CacheType.SIMPLE, SimpleCacheConfiguration.class.getName());
 		mappings.put(CacheType.NONE, NoOpCacheConfiguration.class.getName());
 		MAPPINGS = Collections.unmodifiableMap(mappings);

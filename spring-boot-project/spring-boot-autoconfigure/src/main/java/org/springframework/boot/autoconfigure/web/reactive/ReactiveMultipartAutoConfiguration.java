@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -28,9 +29,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.boot.web.codec.CodecCustomizer;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.codec.multipart.DefaultPartHttpMessageReader;
+import org.springframework.http.codec.multipart.PartEventHttpMessageReader;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 
@@ -42,7 +43,7 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
  * @author Brian Clozel
  * @since 2.6.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 @ConditionalOnClass({ DefaultPartHttpMessageReader.class, WebFluxConfigurer.class })
 @ConditionalOnWebApplication(type = Type.REACTIVE)
 @EnableConfigurationProperties(ReactiveMultipartProperties.class)
@@ -52,8 +53,7 @@ public class ReactiveMultipartAutoConfiguration {
 	@Order(0)
 	CodecCustomizer defaultPartHttpMessageReaderCustomizer(ReactiveMultipartProperties multipartProperties) {
 		return (configurer) -> configurer.defaultCodecs().configureDefaultCodec((codec) -> {
-			if (codec instanceof DefaultPartHttpMessageReader) {
-				DefaultPartHttpMessageReader defaultPartHttpMessageReader = (DefaultPartHttpMessageReader) codec;
+			if (codec instanceof DefaultPartHttpMessageReader defaultPartHttpMessageReader) {
 				PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
 				map.from(multipartProperties::getMaxInMemorySize).asInt(DataSize::toBytes)
 						.to(defaultPartHttpMessageReader::setMaxInMemorySize);
@@ -62,10 +62,17 @@ public class ReactiveMultipartAutoConfiguration {
 				map.from(multipartProperties::getMaxDiskUsagePerPart).asInt(DataSize::toBytes)
 						.to(defaultPartHttpMessageReader::setMaxDiskUsagePerPart);
 				map.from(multipartProperties::getMaxParts).to(defaultPartHttpMessageReader::setMaxParts);
-				map.from(multipartProperties::getStreaming).to(defaultPartHttpMessageReader::setStreaming);
 				map.from(multipartProperties::getFileStorageDirectory).as(Paths::get)
 						.to((dir) -> configureFileStorageDirectory(defaultPartHttpMessageReader, dir));
 				map.from(multipartProperties::getHeadersCharset).to(defaultPartHttpMessageReader::setHeadersCharset);
+			}
+			else if (codec instanceof PartEventHttpMessageReader partEventHttpMessageReader) {
+				PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+				map.from(multipartProperties::getMaxInMemorySize).asInt(DataSize::toBytes)
+						.to(partEventHttpMessageReader::setMaxInMemorySize);
+				map.from(multipartProperties::getMaxHeadersSize).asInt(DataSize::toBytes)
+						.to(partEventHttpMessageReader::setMaxHeadersSize);
+				map.from(multipartProperties::getHeadersCharset).to(partEventHttpMessageReader::setHeadersCharset);
 			}
 		});
 	}

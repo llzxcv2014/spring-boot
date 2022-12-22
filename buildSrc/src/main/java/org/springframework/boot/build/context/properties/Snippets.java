@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,9 @@ class Snippets {
 
 	private Asciidoc getAsciidoc(Snippet snippet, Table table) {
 		Asciidoc asciidoc = new Asciidoc();
-		asciidoc.appendln("[[" + snippet.getAnchor() + "]]");
+		// We have to prepend 'appendix.' as a section id here, otherwise the
+		// spring-asciidoctor-extensions:section-id asciidoctor extension complains
+		asciidoc.appendln("[[appendix." + snippet.getAnchor() + "]]");
 		asciidoc.appendln("== ", snippet.getTitle());
 		table.write(asciidoc);
 		return asciidoc;

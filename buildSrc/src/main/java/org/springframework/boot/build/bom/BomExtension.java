@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -109,7 +108,7 @@ public class BomExtension {
 	}
 
 	public void library(String name, Action<LibraryHandler> action) {
-		this.library(name, null, action);
+		library(name, null, action);
 	}
 
 	public void library(String name, String version, Action<LibraryHandler> action) {
@@ -168,13 +167,18 @@ public class BomExtension {
 		return this.properties;
 	}
 
-	String getArtifactVersionProperty(String groupId, String artifactId) {
-		String coordinates = groupId + ":" + artifactId;
+	String getArtifactVersionProperty(String groupId, String artifactId, String classifier) {
+		String coordinates = groupId + ":" + artifactId + ":" + classifier;
 		return this.artifactVersionProperties.get(coordinates);
 	}
 
 	private void putArtifactVersionProperty(String groupId, String artifactId, String versionProperty) {
-		String coordinates = groupId + ":" + artifactId;
+		putArtifactVersionProperty(groupId, artifactId, null, versionProperty);
+	}
+
+	private void putArtifactVersionProperty(String groupId, String artifactId, String classifier,
+			String versionProperty) {
+		String coordinates = groupId + ":" + artifactId + ":" + ((classifier != null) ? classifier : "");
 		String existing = this.artifactVersionProperties.putIfAbsent(coordinates, versionProperty);
 		if (existing != null) {
 			throw new InvalidUserDataException("Cannot put version property for '" + coordinates
@@ -190,7 +194,7 @@ public class BomExtension {
 		}
 		for (Group group : library.getGroups()) {
 			for (Module module : group.getModules()) {
-				putArtifactVersionProperty(group.getId(), module.getName(), versionProperty);
+				putArtifactVersionProperty(group.getId(), module.getName(), module.getClassifier(), versionProperty);
 				this.dependencyHandler.getConstraints().add(JavaPlatformPlugin.API_CONFIGURATION_NAME,
 						createDependencyNotation(group.getId(), module.getName(), library.getVersion().getVersion()));
 			}
@@ -295,8 +299,8 @@ public class BomExtension {
 
 			public void setModules(List<Object> modules) {
 				this.modules = modules.stream()
-						.map((input) -> (input instanceof Module) ? (Module) input : new Module((String) input))
-						.collect(Collectors.toList());
+						.map((input) -> (input instanceof Module module) ? module : new Module((String) input))
+						.toList();
 			}
 
 			public void setImports(List<String> imports) {
@@ -310,24 +314,35 @@ public class BomExtension {
 			public Object methodMissing(String name, Object args) {
 				if (args instanceof Object[] && ((Object[]) args).length == 1) {
 					Object arg = ((Object[]) args)[0];
-					if (arg instanceof Closure) {
-						ExclusionHandler exclusionHandler = new ExclusionHandler();
-						Closure<?> closure = (Closure<?>) arg;
+					if (arg instanceof Closure<?> closure) {
+						ModuleHandler moduleHandler = new ModuleHandler();
 						closure.setResolveStrategy(Closure.DELEGATE_FIRST);
-						closure.setDelegate(exclusionHandler);
-						closure.call(exclusionHandler);
-						return new Module(name, exclusionHandler.exclusions);
+						closure.setDelegate(moduleHandler);
+						closure.call(moduleHandler);
+						return new Module(name, moduleHandler.type, moduleHandler.classifier, moduleHandler.exclusions);
 					}
 				}
-				throw new InvalidUserDataException("Invalid exclusion configuration for module '" + name + "'");
+				throw new InvalidUserDataException("Invalid configuration for module '" + name + "'");
 			}
 
-			public class ExclusionHandler {
+			public class ModuleHandler {
 
 				private final List<Exclusion> exclusions = new ArrayList<>();
 
+				private String type;
+
+				private String classifier;
+
 				public void exclude(Map<String, String> exclusion) {
 					this.exclusions.add(new Exclusion(exclusion.get("group"), exclusion.get("module")));
+				}
+
+				public void setType(String type) {
+					this.type = type;
+				}
+
+				public void setClassifier(String classifier) {
+					this.classifier = classifier;
 				}
 
 			}

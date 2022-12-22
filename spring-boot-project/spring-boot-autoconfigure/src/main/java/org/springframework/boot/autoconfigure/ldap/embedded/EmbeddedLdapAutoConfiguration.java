@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.PreDestroy;
-
 import com.unboundid.ldap.listener.InMemoryDirectoryServer;
 import com.unboundid.ldap.listener.InMemoryDirectoryServerConfig;
 import com.unboundid.ldap.listener.InMemoryListenerConfig;
 import com.unboundid.ldap.sdk.LDAPException;
 import com.unboundid.ldap.sdk.schema.Schema;
 import com.unboundid.ldif.LDIFReader;
+import jakarta.annotation.PreDestroy;
 
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage;
 import org.springframework.boot.autoconfigure.condition.ConditionMessage.Builder;
@@ -41,6 +42,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
 import org.springframework.boot.autoconfigure.ldap.LdapAutoConfiguration;
 import org.springframework.boot.autoconfigure.ldap.LdapProperties;
+import org.springframework.boot.autoconfigure.ldap.embedded.EmbeddedLdapAutoConfiguration.EmbeddedLdapAutoConfigurationRuntimeHints;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -51,6 +53,7 @@ import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.MutablePropertySources;
@@ -69,11 +72,11 @@ import org.springframework.util.StringUtils;
  * @author Raja Kolli
  * @since 1.5.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(before = LdapAutoConfiguration.class)
 @EnableConfigurationProperties({ LdapProperties.class, EmbeddedLdapProperties.class })
-@AutoConfigureBefore(LdapAutoConfiguration.class)
 @ConditionalOnClass(InMemoryDirectoryServer.class)
 @Conditional(EmbeddedLdapAutoConfiguration.EmbeddedLdapCondition.class)
+@ImportRuntimeHints(EmbeddedLdapAutoConfigurationRuntimeHints.class)
 public class EmbeddedLdapAutoConfiguration {
 
 	private static final String PROPERTY_SOURCE_NAME = "ldap.ports";
@@ -127,7 +130,7 @@ public class EmbeddedLdapAutoConfiguration {
 		}
 	}
 
-	private void importLdif(ApplicationContext applicationContext) throws LDAPException {
+	private void importLdif(ApplicationContext applicationContext) {
 		String location = this.embeddedProperties.getLdif();
 		if (StringUtils.hasText(location)) {
 			try {
@@ -145,9 +148,8 @@ public class EmbeddedLdapAutoConfiguration {
 	}
 
 	private void setPortProperty(ApplicationContext context, int port) {
-		if (context instanceof ConfigurableApplicationContext) {
-			MutablePropertySources sources = ((ConfigurableApplicationContext) context).getEnvironment()
-					.getPropertySources();
+		if (context instanceof ConfigurableApplicationContext configurableContext) {
+			MutablePropertySources sources = configurableContext.getEnvironment().getPropertySources();
 			getLdapPorts(sources).put("local.ldap.port", port);
 		}
 		if (context.getParent() != null) {
@@ -203,12 +205,23 @@ public class EmbeddedLdapAutoConfiguration {
 		LdapContextSource ldapContextSource(Environment environment, LdapProperties properties,
 				EmbeddedLdapProperties embeddedProperties) {
 			LdapContextSource source = new LdapContextSource();
+			source.setBase(properties.getBase());
 			if (embeddedProperties.getCredential().isAvailable()) {
 				source.setUserDn(embeddedProperties.getCredential().getUsername());
 				source.setPassword(embeddedProperties.getCredential().getPassword());
 			}
 			source.setUrls(properties.determineUrls(environment));
 			return source;
+		}
+
+	}
+
+	static class EmbeddedLdapAutoConfigurationRuntimeHints implements RuntimeHintsRegistrar {
+
+		@Override
+		public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+			hints.resources().registerPatternIfPresent(classLoader, "schema.ldif",
+					(hint) -> hint.includes("schema.ldif"));
 		}
 
 	}

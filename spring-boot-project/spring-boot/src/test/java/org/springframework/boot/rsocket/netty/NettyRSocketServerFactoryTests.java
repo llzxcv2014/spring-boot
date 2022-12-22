@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ import org.springframework.core.io.buffer.NettyDataBufferFactory;
 import org.springframework.http.client.reactive.ReactorResourceFactory;
 import org.springframework.messaging.rsocket.RSocketRequester;
 import org.springframework.messaging.rsocket.RSocketStrategies;
-import org.springframework.util.SocketUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -65,6 +64,7 @@ import static org.mockito.Mockito.mock;
  * @author Brian Clozel
  * @author Leo Li
  * @author Chris Bono
+ * @author Scott Frederick
  */
 class NettyRSocketServerFactoryTests {
 
@@ -97,11 +97,10 @@ class NettyRSocketServerFactoryTests {
 	void specificPort() {
 		NettyRSocketServerFactory factory = getFactory();
 		int specificPort = doWithRetry(() -> {
-			int port = SocketUtils.findAvailableTcpPort(41000);
-			factory.setPort(port);
+			factory.setPort(0);
 			this.server = factory.create(new EchoRequestResponseAcceptor());
 			this.server.start();
-			return port;
+			return this.server.address().getPort();
 		});
 		this.requester = createRSocketTcpClient();
 		assertThat(this.server.address().getPort()).isEqualTo(specificPort);
@@ -168,6 +167,30 @@ class NettyRSocketServerFactoryTests {
 		testBasicSslWithKeyStore("src/test/resources/test.jks", "password", Transport.WEBSOCKET);
 	}
 
+	@Test
+	void tcpTransportBasicSslCertificateFromClassPath() {
+		testBasicSslWithPemCertificate("classpath:test-cert.pem", "classpath:test-key.pem", "classpath:test-cert.pem",
+				Transport.TCP);
+	}
+
+	@Test
+	void tcpTransportBasicSslCertificateFromFileSystem() {
+		testBasicSslWithPemCertificate("src/test/resources/test-cert.pem", "src/test/resources/test-key.pem",
+				"src/test/resources/test-cert.pem", Transport.TCP);
+	}
+
+	@Test
+	void websocketTransportBasicSslCertificateFromClassPath() {
+		testBasicSslWithPemCertificate("classpath:test-cert.pem", "classpath:test-key.pem", "classpath:test-cert.pem",
+				Transport.WEBSOCKET);
+	}
+
+	@Test
+	void websocketTransportBasicSslCertificateFromFileSystem() {
+		testBasicSslWithPemCertificate("src/test/resources/test-cert.pem", "src/test/resources/test-key.pem",
+				"src/test/resources/test-cert.pem", Transport.WEBSOCKET);
+	}
+
 	private void checkEchoRequest() {
 		String payload = "test payload";
 		Mono<String> response = this.requester.route("test").data(payload).retrieveMono(String.class);
@@ -180,6 +203,23 @@ class NettyRSocketServerFactoryTests {
 		Ssl ssl = new Ssl();
 		ssl.setKeyStore(keyStore);
 		ssl.setKeyPassword(keyPassword);
+		factory.setSsl(ssl);
+		this.server = factory.create(new EchoRequestResponseAcceptor());
+		this.server.start();
+		this.requester = (transport == Transport.TCP) ? createSecureRSocketTcpClient()
+				: createSecureRSocketWebSocketClient();
+		checkEchoRequest();
+	}
+
+	private void testBasicSslWithPemCertificate(String certificate, String certificatePrivateKey,
+			String trustCertificate, Transport transport) {
+		NettyRSocketServerFactory factory = getFactory();
+		factory.setTransport(transport);
+		Ssl ssl = new Ssl();
+		ssl.setCertificate(certificate);
+		ssl.setCertificatePrivateKey(certificatePrivateKey);
+		ssl.setTrustCertificate(trustCertificate);
+		ssl.setKeyStorePassword("");
 		factory.setSsl(ssl);
 		this.server = factory.create(new EchoRequestResponseAcceptor());
 		this.server.start();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 package org.springframework.boot.test.web.client;
+
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  * Tests for {@link MockServerRestTemplateCustomizer}.
  *
  * @author Phillip Webb
+ * @author Moritz Halbritter
  */
 class MockServerRestTemplateCustomizerTests {
 
@@ -55,14 +58,32 @@ class MockServerRestTemplateCustomizerTests {
 
 	@Test
 	void createWhenExpectationManagerClassIsNullShouldThrowException() {
-		assertThatIllegalArgumentException().isThrownBy(() -> new MockServerRestTemplateCustomizer(null))
+		Class<? extends RequestExpectationManager> expectationManager = null;
+		assertThatIllegalArgumentException().isThrownBy(() -> new MockServerRestTemplateCustomizer(expectationManager))
 				.withMessageContaining("ExpectationManager must not be null");
+	}
+
+	@Test
+	void createWhenExpectationManagerSupplierIsNullShouldThrowException() {
+		Supplier<? extends RequestExpectationManager> expectationManagerSupplier = null;
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> new MockServerRestTemplateCustomizer(expectationManagerSupplier))
+				.withMessageContaining("ExpectationManagerSupplier must not be null");
 	}
 
 	@Test
 	void createShouldUseExpectationManagerClass() {
 		MockServerRestTemplateCustomizer customizer = new MockServerRestTemplateCustomizer(
 				UnorderedRequestExpectationManager.class);
+		customizer.customize(new RestTemplate());
+		assertThat(customizer.getServer()).extracting("expectationManager")
+				.isInstanceOf(UnorderedRequestExpectationManager.class);
+	}
+
+	@Test
+	void createShouldUseSupplier() {
+		MockServerRestTemplateCustomizer customizer = new MockServerRestTemplateCustomizer(
+				UnorderedRequestExpectationManager::new);
 		customizer.customize(new RestTemplate());
 		assertThat(customizer.getServer()).extracting("expectationManager")
 				.isInstanceOf(UnorderedRequestExpectationManager.class);

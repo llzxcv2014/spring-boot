@@ -60,8 +60,8 @@ To use it, add the following declaration for the https://github.com/git-commit-i
 	<build>
 		<plugins>
 			<plugin>
-				<groupId>pl.project13.maven</groupId>
-				<artifactId>git-commit-id-plugin</artifactId>
+				<groupId>io.github.git-commit-id</groupId>
+				<artifactId>git-commit-id-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
 	</build>
@@ -72,7 +72,7 @@ Gradle users can achieve the same result by using the https://plugins.gradle.org
 [source,gradle,indent=0,subs="verbatim"]
 ----
 	plugins {
-		id "com.gorylenko.gradle-git-properties" version "2.2.4"
+		id "com.gorylenko.gradle-git-properties" version "2.3.2"
 	}
 ----
 
@@ -149,7 +149,7 @@ If your application contains classes that you want to share with other projects,
 The separate module can then be depended upon by your application and other projects.
 
 If you cannot rearrange your code as recommended above, Spring Boot's Maven and Gradle plugins must be configured to produce a separate artifact that is suitable for use as a dependency.
-The executable archive cannot be used as a dependency as the <<executable-jar#executable-jar.nested-jars.jar-structure,executable jar format>> packages application classes in `BOOT-INF/classes`.
+The executable archive cannot be used as a dependency as the <<executable-jar#appendix.executable-jar.nested-jars.jar-structure,executable jar format>> packages application classes in `BOOT-INF/classes`.
 This means that they cannot be found when the executable jar is used as a dependency.
 
 To produce the two artifacts, one that can be used as a dependency and one that is executable, a classifier must be specified.
@@ -257,7 +257,7 @@ See {spring-boot-maven-plugin-docs}#run-example-debug[this example] for more det
 
 
 [[howto.build.build-an-executable-archive-with-ant-without-using-spring-boot-antlib]]
-=== Build an Executable Archive from Ant without Using spring-boot-antlib
+=== Build an Executable Archive From Ant without Using spring-boot-antlib
 To build with Ant, you need to grab dependencies, compile, and then create a jar or war archive.
 To make it executable, you can either use the `spring-boot-antlib` module or you can follow these instructions:
 

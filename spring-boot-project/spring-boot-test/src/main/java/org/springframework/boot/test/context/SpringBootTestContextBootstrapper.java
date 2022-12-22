@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ import org.springframework.test.context.TestContext;
 import org.springframework.test.context.TestContextAnnotationUtils;
 import org.springframework.test.context.TestContextBootstrapper;
 import org.springframework.test.context.TestExecutionListener;
+import org.springframework.test.context.aot.AotTestAttributes;
 import org.springframework.test.context.support.DefaultTestContextBootstrapper;
 import org.springframework.test.context.support.TestPropertySourceUtils;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -82,7 +83,7 @@ import org.springframework.util.StringUtils;
  */
 public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstrapper {
 
-	private static final String[] WEB_ENVIRONMENT_CLASSES = { "javax.servlet.Servlet",
+	private static final String[] WEB_ENVIRONMENT_CLASSES = { "jakarta.servlet.Servlet",
 			"org.springframework.web.context.ConfigurableWebApplicationContext" };
 
 	private static final String REACTIVE_WEB_ENVIRONMENT_CLASS = "org.springframework."
@@ -96,6 +97,16 @@ public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstr
 			+ "context.web.ServletTestExecutionListener.activateListener";
 
 	private static final Log logger = LogFactory.getLog(SpringBootTestContextBootstrapper.class);
+
+	private final AotTestAttributes aotTestAttributes;
+
+	public SpringBootTestContextBootstrapper() {
+		this(AotTestAttributes.getInstance());
+	}
+
+	SpringBootTestContextBootstrapper(AotTestAttributes aotTestAttributes) {
+		this.aotTestAttributes = aotTestAttributes;
+	}
 
 	@Override
 	public TestContext buildTestContext() {
@@ -112,8 +123,9 @@ public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstr
 	}
 
 	@Override
-	protected Set<Class<? extends TestExecutionListener>> getDefaultTestExecutionListenerClasses() {
-		Set<Class<? extends TestExecutionListener>> listeners = super.getDefaultTestExecutionListenerClasses();
+	@SuppressWarnings("removal")
+	protected List<TestExecutionListener> getDefaultTestExecutionListeners() {
+		List<TestExecutionListener> listeners = new ArrayList<>(super.getDefaultTestExecutionListeners());
 		List<DefaultTestExecutionListenersPostProcessor> postProcessors = SpringFactoriesLoader
 				.loadFactories(DefaultTestExecutionListenersPostProcessor.class, getClass().getClassLoader());
 		for (DefaultTestExecutionListenersPostProcessor postProcessor : postProcessors) {
@@ -231,12 +243,23 @@ public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstr
 		if (containsNonTestComponent(classes) || mergedConfig.hasLocations()) {
 			return classes;
 		}
-		Class<?> found = new AnnotatedClassFinder(SpringBootConfiguration.class)
-				.findFromClass(mergedConfig.getTestClass());
-		Assert.state(found != null, "Unable to find a @SpringBootConfiguration, you need to use "
-				+ "@ContextConfiguration or @SpringBootTest(classes=...) with your test");
+		Class<?> found = findConfigurationClass(mergedConfig.getTestClass());
 		logger.info("Found @SpringBootConfiguration " + found.getName() + " for test " + mergedConfig.getTestClass());
 		return merge(found, classes);
+	}
+
+	private Class<?> findConfigurationClass(Class<?> testClass) {
+		String propertyName = "%s.SpringBootConfiguration.%s"
+				.formatted(SpringBootTestContextBootstrapper.class.getName(), testClass.getName());
+		String foundClassName = this.aotTestAttributes.getString(propertyName);
+		if (foundClassName != null) {
+			return ClassUtils.resolveClassName(foundClassName, testClass.getClassLoader());
+		}
+		Class<?> found = new AnnotatedClassFinder(SpringBootConfiguration.class).findFromClass(testClass);
+		Assert.state(found != null, "Unable to find a @SpringBootConfiguration, you need to use "
+				+ "@ContextConfiguration or @SpringBootTest(classes=...) with your test");
+		this.aotTestAttributes.setAttribute(propertyName, found.getName());
+		return found;
 	}
 
 	private boolean containsNonTestComponent(Class<?>[] classes) {
@@ -293,8 +316,12 @@ public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstr
 			// precedence
 			propertySourceProperties.addAll(0, Arrays.asList(properties));
 		}
-		if (getWebEnvironment(testClass) == WebEnvironment.RANDOM_PORT) {
+		WebEnvironment webEnvironment = getWebEnvironment(testClass);
+		if (webEnvironment == WebEnvironment.RANDOM_PORT) {
 			propertySourceProperties.add("server.port=0");
+		}
+		else if (webEnvironment == WebEnvironment.NONE) {
+			propertySourceProperties.add("spring.main.web-application-type=none");
 		}
 	}
 
@@ -358,8 +385,7 @@ public class SpringBootTestContextBootstrapper extends DefaultTestContextBootstr
 	protected final MergedContextConfiguration createModifiedConfig(MergedContextConfiguration mergedConfig,
 			Class<?>[] classes, String[] propertySourceProperties) {
 		Set<ContextCustomizer> contextCustomizers = new LinkedHashSet<>(mergedConfig.getContextCustomizers());
-		contextCustomizers.add(new SpringBootTestArgs(mergedConfig.getTestClass()));
-		contextCustomizers.add(new SpringBootTestWebEnvironment(mergedConfig.getTestClass()));
+		contextCustomizers.add(new SpringBootTestAnnotation(mergedConfig.getTestClass()));
 		return new MergedContextConfiguration(mergedConfig.getTestClass(), mergedConfig.getLocations(), classes,
 				mergedConfig.getContextInitializerClasses(), mergedConfig.getActiveProfiles(),
 				mergedConfig.getPropertySourceLocations(), propertySourceProperties, contextCustomizers,

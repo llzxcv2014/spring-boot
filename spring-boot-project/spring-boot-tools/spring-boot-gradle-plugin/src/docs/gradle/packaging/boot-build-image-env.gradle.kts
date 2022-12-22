@@ -6,14 +6,14 @@ plugins {
 }
 
 // tag::env[]
-tasks.getByName<BootBuildImage>("bootBuildImage") {
-	environment = mapOf("BP_JVM_VERSION" to "8.*")
+tasks.named<BootBuildImage>("bootBuildImage") {
+	environment.set(environment.get() + mapOf("BP_JVM_VERSION" to "17"))
 }
 // end::env[]
 
 tasks.register("bootBuildImageEnvironment") {
 	doFirst {
-		for((name, value) in tasks.getByName<BootBuildImage>("bootBuildImage").environment) {
+		for((name, value) in tasks.getByName<BootBuildImage>("bootBuildImage").environment.get()) {
 			print(name + "=" + value)
 		}
 	}

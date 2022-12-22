@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import org.assertj.core.api.Condition;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.output.ToStringConsumer;
 import org.testcontainers.containers.startupcheck.OneShotStartupCheckStrategy;
 import org.testcontainers.images.builder.ImageFromDockerfile;
@@ -52,7 +54,7 @@ abstract class AbstractLaunchScriptIntegrationTests {
 		this.scriptsDir = scriptsDir;
 	}
 
-	static List<Object[]> parameters(Predicate<File> osFilter) {
+	static List<Object[]> filterParameters(Predicate<File> osFilter) {
 		List<Object[]> parameters = new ArrayList<>();
 		for (File os : new File("src/intTest/resources/conf").listFiles()) {
 			if (osFilter.test(os)) {
@@ -85,6 +87,7 @@ abstract class AbstractLaunchScriptIntegrationTests {
 		try (LaunchScriptTestContainer container = new LaunchScriptTestContainer(os, version, this.scriptsDir,
 				script)) {
 			container.withLogConsumer(consumer);
+			container.withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("docker")));
 			container.start();
 			while (container.isRunning()) {
 				Thread.sleep(100);

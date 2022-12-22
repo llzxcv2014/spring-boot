@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,14 +33,15 @@ import org.springframework.boot.actuate.endpoint.InvocationContext;
 import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.invoke.OperationInvoker;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Tests for {@link CachingOperationInvoker}.
@@ -101,6 +103,30 @@ class CachingOperationInvokerTests {
 		assertThat(response).isSameAs(cachedResponse);
 	}
 
+	@Test // gh-28313
+	void cacheWhenEachPrincipalIsUniqueDoesNotConsumeTooMuchMemory() throws Exception {
+		MonoOperationInvoker target = new MonoOperationInvoker();
+		CachingOperationInvoker invoker = new CachingOperationInvoker(target, 50L);
+		int count = 1000;
+		for (int i = 0; i < count; i++) {
+			invokeWithUniquePrincipal(invoker);
+		}
+		long expired = System.currentTimeMillis() + 50;
+		while (System.currentTimeMillis() < expired) {
+			Thread.sleep(10);
+		}
+		invokeWithUniquePrincipal(invoker);
+		assertThat(invoker).extracting("cachedResponses", as(InstanceOfAssertFactories.MAP)).hasSizeLessThan(count);
+	}
+
+	private void invokeWithUniquePrincipal(CachingOperationInvoker invoker) {
+		SecurityContext securityContext = mock(SecurityContext.class);
+		Principal principal = mock(Principal.class);
+		given(securityContext.getPrincipal()).willReturn(principal);
+		InvocationContext context = new InvocationContext(securityContext, Collections.emptyMap());
+		((Mono<?>) invoker.invoke(context)).block();
+	}
+
 	private void assertCacheIsUsed(Map<String, Object> parameters) {
 		assertCacheIsUsed(parameters, null);
 	}
@@ -117,10 +143,10 @@ class CachingOperationInvokerTests {
 		CachingOperationInvoker invoker = new CachingOperationInvoker(target, CACHE_TTL);
 		Object response = invoker.invoke(context);
 		assertThat(response).isSameAs(expected);
-		verify(target, times(1)).invoke(context);
+		then(target).should().invoke(context);
 		Object cachedResponse = invoker.invoke(context);
 		assertThat(cachedResponse).isSameAs(response);
-		verifyNoMoreInteractions(target);
+		then(target).shouldHaveNoMoreInteractions();
 	}
 
 	@Test
@@ -135,7 +161,7 @@ class CachingOperationInvokerTests {
 		invoker.invoke(context);
 		invoker.invoke(context);
 		invoker.invoke(context);
-		verify(target, times(3)).invoke(context);
+		then(target).should(times(3)).invoke(context);
 	}
 
 	@Test
@@ -154,7 +180,7 @@ class CachingOperationInvokerTests {
 		assertThat(invoker.invoke(context)).isEqualTo(result1);
 		assertThat(invoker.invoke(context)).isEqualTo(result2);
 		assertThat(invoker.invoke(context)).isEqualTo(result3);
-		verify(target, times(3)).invoke(context);
+		then(target).should(times(3)).invoke(context);
 	}
 
 	@Test
@@ -175,8 +201,8 @@ class CachingOperationInvokerTests {
 		assertThat(invoker.invoke(authenticatedContext)).isEqualTo(authenticatedResult);
 		assertThat(invoker.invoke(anonymousContext)).isEqualTo(anonymousResult);
 		assertThat(invoker.invoke(authenticatedContext)).isEqualTo(authenticatedResult);
-		verify(target, times(1)).invoke(anonymousContext);
-		verify(target, times(1)).invoke(authenticatedContext);
+		then(target).should().invoke(anonymousContext);
+		then(target).should().invoke(authenticatedContext);
 	}
 
 	@Test
@@ -192,7 +218,7 @@ class CachingOperationInvokerTests {
 			Thread.sleep(10);
 		}
 		invoker.invoke(context);
-		verify(target, times(2)).invoke(context);
+		then(target).should(times(2)).invoke(context);
 	}
 
 	@Test
@@ -207,12 +233,32 @@ class CachingOperationInvokerTests {
 		given(target.invoke(contextV2)).willReturn(expectedV2);
 		given(target.invoke(contextV3)).willReturn(expectedV3);
 		CachingOperationInvoker invoker = new CachingOperationInvoker(target, CACHE_TTL);
-		Object response = invoker.invoke(contextV2);
-		assertThat(response).isSameAs(expectedV2);
-		verify(target, times(1)).invoke(contextV2);
-		Object cachedResponse = invoker.invoke(contextV3);
-		assertThat(cachedResponse).isNotSameAs(response);
-		verify(target, times(1)).invoke(contextV3);
+		Object responseV2 = invoker.invoke(contextV2);
+		assertThat(responseV2).isSameAs(expectedV2);
+		then(target).should().invoke(contextV2);
+		Object responseV3 = invoker.invoke(contextV3);
+		assertThat(responseV3).isNotSameAs(responseV2);
+		then(target).should().invoke(contextV3);
+	}
+
+	@Test
+	void targetInvokedWithDifferentWebServerNamespace() {
+		OperationInvoker target = mock(OperationInvoker.class);
+		Object expectedServer = new Object();
+		Object expectedManagement = new Object();
+		InvocationContext contextServer = new InvocationContext(mock(SecurityContext.class), Collections.emptyMap(),
+				new WebServerNamespaceArgumentResolver(WebServerNamespace.SERVER));
+		InvocationContext contextManagement = new InvocationContext(mock(SecurityContext.class), Collections.emptyMap(),
+				new WebServerNamespaceArgumentResolver(WebServerNamespace.MANAGEMENT));
+		given(target.invoke(contextServer)).willReturn(expectedServer);
+		given(target.invoke(contextManagement)).willReturn(expectedManagement);
+		CachingOperationInvoker invoker = new CachingOperationInvoker(target, CACHE_TTL);
+		Object responseServer = invoker.invoke(contextServer);
+		assertThat(responseServer).isSameAs(expectedServer);
+		then(target).should(times(1)).invoke(contextServer);
+		Object responseManagement = invoker.invoke(contextManagement);
+		assertThat(responseManagement).isNotSameAs(responseServer);
+		then(target).should(times(1)).invoke(contextManagement);
 	}
 
 	private static class MonoOperationInvoker implements OperationInvoker {
@@ -257,6 +303,27 @@ class CachingOperationInvokerTests {
 		@Override
 		public boolean canResolve(Class<?> type) {
 			return ApiVersion.class.equals(type);
+		}
+
+	}
+
+	private static final class WebServerNamespaceArgumentResolver implements OperationArgumentResolver {
+
+		private final WebServerNamespace webServerNamespace;
+
+		private WebServerNamespaceArgumentResolver(WebServerNamespace webServerNamespace) {
+			this.webServerNamespace = webServerNamespace;
+		}
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public <T> T resolve(Class<T> type) {
+			return (T) this.webServerNamespace;
+		}
+
+		@Override
+		public boolean canResolve(Class<?> type) {
+			return WebServerNamespace.class.equals(type);
 		}
 
 	}

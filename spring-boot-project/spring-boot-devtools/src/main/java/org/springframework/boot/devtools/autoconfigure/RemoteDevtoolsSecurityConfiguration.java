@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,12 @@
 package org.springframework.boot.devtools.autoconfigure;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.security.SecurityProperties;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
@@ -48,10 +46,10 @@ class RemoteDevtoolsSecurityConfiguration {
 
 	@Bean
 	@Order(SecurityProperties.BASIC_AUTH_ORDER - 1)
-	@ConditionalOnMissingBean(WebSecurityConfigurerAdapter.class)
 	SecurityFilterChain devtoolsSecurityFilterChain(HttpSecurity http) throws Exception {
-		http.requestMatcher(new AntPathRequestMatcher(this.url)).authorizeRequests().anyRequest().anonymous().and()
-				.csrf().disable();
+		http.securityMatcher(new AntPathRequestMatcher(this.url));
+		http.authorizeHttpRequests().anyRequest().anonymous();
+		http.csrf().disable();
 		return http.build();
 	}
 

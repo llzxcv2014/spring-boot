@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package org.springframework.boot;
 
+import java.time.Duration;
+
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -31,6 +33,7 @@ import org.springframework.core.io.support.SpringFactoriesLoader;
  * @author Phillip Webb
  * @author Dave Syer
  * @author Andy Wilkinson
+ * @author Chris Bono
  * @since 1.0.0
  */
 public interface SpringApplicationRunListener {
@@ -74,9 +77,10 @@ public interface SpringApplicationRunListener {
 	 * {@link CommandLineRunner CommandLineRunners} and {@link ApplicationRunner
 	 * ApplicationRunners} have not been called.
 	 * @param context the application context.
-	 * @since 2.0.0
+	 * @param timeTaken the time taken to start the application or {@code null} if unknown
+	 * @since 2.6.0
 	 */
-	default void started(ConfigurableApplicationContext context) {
+	default void started(ConfigurableApplicationContext context, Duration timeTaken) {
 	}
 
 	/**
@@ -84,9 +88,11 @@ public interface SpringApplicationRunListener {
 	 * been refreshed and all {@link CommandLineRunner CommandLineRunners} and
 	 * {@link ApplicationRunner ApplicationRunners} have been called.
 	 * @param context the application context.
-	 * @since 2.0.0
+	 * @param timeTaken the time taken for the application to be ready or {@code null} if
+	 * unknown
+	 * @since 2.6.0
 	 */
-	default void running(ConfigurableApplicationContext context) {
+	default void ready(ConfigurableApplicationContext context, Duration timeTaken) {
 	}
 
 	/**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 /**
@@ -49,7 +50,7 @@ public class MetricsProperties {
 
 	/**
 	 * Whether meter IDs starting with the specified name should be enabled. The longest
-	 * match wins, the key `all` can also be used to configure all meters.
+	 * match wins, the key 'all' can also be used to configure all meters.
 	 */
 	private final Map<String, Boolean> enable = new LinkedHashMap<>();
 
@@ -142,20 +143,13 @@ public class MetricsProperties {
 				 */
 				private String metricName = "http.client.requests";
 
-				/**
-				 * Auto-timed request settings.
-				 */
-				@NestedConfigurationProperty
-				private final AutoTimeProperties autotime = new AutoTimeProperties();
-
-				public AutoTimeProperties getAutotime() {
-					return this.autotime;
-				}
-
+				@Deprecated(since = "3.0.0", forRemoval = true)
+				@DeprecatedConfigurationProperty(replacement = "management.observations.http.client.requests.name")
 				public String getMetricName() {
 					return this.metricName;
 				}
 
+				@Deprecated(since = "3.0.0", forRemoval = true)
 				public void setMetricName(String metricName) {
 					this.metricName = metricName;
 				}
@@ -194,35 +188,16 @@ public class MetricsProperties {
 				 */
 				private String metricName = "http.server.requests";
 
-				/**
-				 * Whether the trailing slash should be ignored when recording metrics.
-				 */
-				private boolean ignoreTrailingSlash = true;
-
-				/**
-				 * Auto-timed request settings.
-				 */
-				@NestedConfigurationProperty
-				private final AutoTimeProperties autotime = new AutoTimeProperties();
-
-				public AutoTimeProperties getAutotime() {
-					return this.autotime;
-				}
-
+				@Deprecated(since = "3.0.0", forRemoval = true)
+				@DeprecatedConfigurationProperty(replacement = "management.observations.http.server.requests.name")
 				public String getMetricName() {
 					return this.metricName;
 				}
 
+				@Deprecated(since = "3.0.0", forRemoval = true)
+				@DeprecatedConfigurationProperty(replacement = "management.observations.http.server.requests.name")
 				public void setMetricName(String metricName) {
 					this.metricName = metricName;
-				}
-
-				public boolean isIgnoreTrailingSlash() {
-					return this.ignoreTrailingSlash;
-				}
-
-				public void setIgnoreTrailingSlash(boolean ignoreTrailingSlash) {
-					this.ignoreTrailingSlash = ignoreTrailingSlash;
 				}
 
 			}
@@ -301,14 +276,14 @@ public class MetricsProperties {
 		 * Whether meter IDs starting with the specified name should publish percentile
 		 * histograms. For monitoring systems that support aggregable percentile
 		 * calculation based on a histogram, this can be set to true. For other systems,
-		 * this has no effect. The longest match wins, the key `all` can also be used to
+		 * this has no effect. The longest match wins, the key 'all' can also be used to
 		 * configure all meters.
 		 */
 		private final Map<String, Boolean> percentilesHistogram = new LinkedHashMap<>();
 
 		/**
 		 * Specific computed non-aggregable percentiles to ship to the backend for meter
-		 * IDs starting-with the specified name. The longest match wins, the key `all` can
+		 * IDs starting-with the specified name. The longest match wins, the key 'all' can
 		 * also be used to configure all meters.
 		 */
 		private final Map<String, double[]> percentiles = new LinkedHashMap<>();
@@ -316,21 +291,21 @@ public class MetricsProperties {
 		/**
 		 * Specific service-level objective boundaries for meter IDs starting with the
 		 * specified name. The longest match wins. Counters will be published for each
-		 * specified boundary. Values can be specified as a long or as a Duration value
+		 * specified boundary. Values can be specified as a double or as a Duration value
 		 * (for timer meters, defaulting to ms if no unit specified).
 		 */
 		private final Map<String, ServiceLevelObjectiveBoundary[]> slo = new LinkedHashMap<>();
 
 		/**
 		 * Minimum value that meter IDs starting with the specified name are expected to
-		 * observe. The longest match wins. Values can be specified as a long or as a
+		 * observe. The longest match wins. Values can be specified as a double or as a
 		 * Duration value (for timer meters, defaulting to ms if no unit specified).
 		 */
 		private final Map<String, String> minimumExpectedValue = new LinkedHashMap<>();
 
 		/**
 		 * Maximum value that meter IDs starting with the specified name are expected to
-		 * observe. The longest match wins. Values can be specified as a long or as a
+		 * observe. The longest match wins. Values can be specified as a double or as a
 		 * Duration value (for timer meters, defaulting to ms if no unit specified).
 		 */
 		private final Map<String, String> maximumExpectedValue = new LinkedHashMap<>();

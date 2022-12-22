@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package org.springframework.boot.autoconfigure.web.reactive.function.client;
 import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
 import org.apache.hc.core5.http.nio.AsyncRequestProducer;
 import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.http.HttpClientTransportOverHTTP;
+import org.eclipse.jetty.io.ClientConnector;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,6 +31,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.client.reactive.ClientHttpConnector;
 import org.springframework.http.client.reactive.HttpComponentsClientHttpConnector;
+import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.http.client.reactive.JettyClientHttpConnector;
 import org.springframework.http.client.reactive.JettyResourceFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -82,8 +85,11 @@ class ClientHttpConnectorConfiguration {
 		@Bean
 		@Lazy
 		JettyClientHttpConnector jettyClientHttpConnector(JettyResourceFactory jettyResourceFactory) {
-			SslContextFactory sslContextFactory = new SslContextFactory.Client();
-			HttpClient httpClient = new HttpClient(sslContextFactory);
+			SslContextFactory.Client sslContextFactory = new SslContextFactory.Client();
+			ClientConnector connector = new ClientConnector();
+			connector.setSslContextFactory(sslContextFactory);
+			HttpClientTransportOverHTTP transport = new HttpClientTransportOverHTTP(connector);
+			HttpClient httpClient = new HttpClient(transport);
 			return new JettyClientHttpConnector(httpClient, jettyResourceFactory);
 		}
 
@@ -98,6 +104,19 @@ class ClientHttpConnectorConfiguration {
 		@Lazy
 		HttpComponentsClientHttpConnector httpComponentsClientHttpConnector() {
 			return new HttpComponentsClientHttpConnector();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnClass(java.net.http.HttpClient.class)
+	@ConditionalOnMissingBean(ClientHttpConnector.class)
+	static class JdkClient {
+
+		@Bean
+		@Lazy
+		JdkClientHttpConnector jdkClientHttpConnector() {
+			return new JdkClientHttpConnector();
 		}
 
 	}

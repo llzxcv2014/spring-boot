@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
@@ -30,7 +31,7 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 /**
- * Utility class that can resolve placholder text with the actual {@link DatabaseDriver}
+ * Utility class that can resolve placeholder text with the actual {@link DatabaseDriver}
  * platform.
  * <p>
  * By default, the name of the platform is the {@link DatabaseDriver#getId ID of the
@@ -70,7 +71,7 @@ public class PlatformPlaceholderDatabaseDriverResolver {
 	}
 
 	/**
-	 * Creates a new {@code PlatformPlaceholdDatabaseDriverResolver} that will map the
+	 * Creates a new {@link PlatformPlaceholderDatabaseDriverResolver} that will map the
 	 * given {@code driver} to the given {@code platform}.
 	 * @param driver the driver
 	 * @param platform the platform
@@ -92,6 +93,23 @@ public class PlatformPlaceholderDatabaseDriverResolver {
 	 */
 	public List<String> resolveAll(DataSource dataSource, String... values) {
 		Assert.notNull(dataSource, "DataSource must not be null");
+		return resolveAll(() -> determinePlatform(dataSource), values);
+	}
+
+	/**
+	 * Resolves the placeholders in the given {@code values}, replacing them with the
+	 * given platform.
+	 * @param platform the platform to use
+	 * @param values the values in which placeholders are resolved
+	 * @return the values with their placeholders resolved
+	 * @since 2.6.2
+	 */
+	public List<String> resolveAll(String platform, String... values) {
+		Assert.notNull(platform, "Platform must not be null");
+		return resolveAll(() -> platform, values);
+	}
+
+	private List<String> resolveAll(Supplier<String> platformProvider, String... values) {
 		if (ObjectUtils.isEmpty(values)) {
 			return Collections.emptyList();
 		}
@@ -100,7 +118,7 @@ public class PlatformPlaceholderDatabaseDriverResolver {
 		for (String value : values) {
 			if (StringUtils.hasLength(value)) {
 				if (value.contains(this.placeholder)) {
-					platform = (platform != null) ? platform : determinePlatform(dataSource);
+					platform = (platform != null) ? platform : platformProvider.get();
 					value = value.replace(this.placeholder, platform);
 				}
 			}

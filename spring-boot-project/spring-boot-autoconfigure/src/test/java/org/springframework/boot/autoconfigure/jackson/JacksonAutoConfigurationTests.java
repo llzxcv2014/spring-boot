@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonCreator.Mode;
@@ -38,6 +39,7 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -47,11 +49,21 @@ import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.util.StdDateFormat;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.predicate.ReflectionHintsPredicates;
+import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
+import org.springframework.beans.factory.BeanCurrentlyInCreationException;
+import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.http.HttpMessageConvertersAutoConfiguration;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.JacksonAutoConfigurationRuntimeHints;
 import org.springframework.boot.jackson.JsonComponent;
+import org.springframework.boot.jackson.JsonMixin;
+import org.springframework.boot.jackson.JsonMixinModule;
+import org.springframework.boot.jackson.JsonMixinModuleEntries;
 import org.springframework.boot.jackson.JsonObjectSerializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -62,6 +74,7 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -74,6 +87,7 @@ import static org.mockito.Mockito.mock;
  * @author Sebastien Deleuze
  * @author Johannes Edmeier
  * @author Grzegorz Poznachowski
+ * @author Ralf Ueberfuhr
  */
 class JacksonAutoConfigurationTests {
 
@@ -88,6 +102,16 @@ class JacksonAutoConfigurationTests {
 					ObjectMapper mapper = context.getBean(ObjectMapper.class);
 					assertThat(mapper.writeValueAsString(new Foo())).isEqualTo("{\"foo\":\"bar\"}");
 				});
+	}
+
+	@Test
+	void jsonMixinModuleShouldBeAutoConfiguredWithBasePackages() {
+		this.contextRunner.withUserConfiguration(MixinConfiguration.class).run((context) -> {
+			assertThat(context).hasSingleBean(JsonMixinModule.class).hasSingleBean(JsonMixinModuleEntries.class);
+			JsonMixinModuleEntries moduleEntries = context.getBean(JsonMixinModuleEntries.class);
+			assertThat(moduleEntries).extracting("entries", InstanceOfAssertFactories.MAP)
+					.contains(entry(Person.class, EmptyMixin.class));
+		});
 	}
 
 	@Test
@@ -196,10 +220,11 @@ class JacksonAutoConfigurationTests {
 				.run((context) -> {
 					ObjectMapper mapper = context.getBean(ObjectMapper.class);
 					assertThat(MapperFeature.REQUIRE_SETTERS_FOR_GETTERS.enabledByDefault()).isFalse();
-					assertThat(mapper.getSerializationConfig()
-							.hasMapperFeatures(MapperFeature.REQUIRE_SETTERS_FOR_GETTERS.getMask())).isTrue();
-					assertThat(mapper.getDeserializationConfig()
-							.hasMapperFeatures(MapperFeature.REQUIRE_SETTERS_FOR_GETTERS.getMask())).isTrue();
+
+					assertThat(mapper.getSerializationConfig().isEnabled(MapperFeature.REQUIRE_SETTERS_FOR_GETTERS))
+							.isTrue();
+					assertThat(mapper.getDeserializationConfig().isEnabled(MapperFeature.REQUIRE_SETTERS_FOR_GETTERS))
+							.isTrue();
 				});
 	}
 
@@ -208,10 +233,8 @@ class JacksonAutoConfigurationTests {
 		this.contextRunner.withPropertyValues("spring.jackson.mapper.use_annotations:false").run((context) -> {
 			ObjectMapper mapper = context.getBean(ObjectMapper.class);
 			assertThat(MapperFeature.USE_ANNOTATIONS.enabledByDefault()).isTrue();
-			assertThat(mapper.getDeserializationConfig().hasMapperFeatures(MapperFeature.USE_ANNOTATIONS.getMask()))
-					.isFalse();
-			assertThat(mapper.getSerializationConfig().hasMapperFeatures(MapperFeature.USE_ANNOTATIONS.getMask()))
-					.isFalse();
+			assertThat(mapper.getDeserializationConfig().isEnabled(MapperFeature.USE_ANNOTATIONS)).isFalse();
+			assertThat(mapper.getSerializationConfig().isEnabled(MapperFeature.USE_ANNOTATIONS)).isFalse();
 		});
 	}
 
@@ -432,6 +455,28 @@ class JacksonAutoConfigurationTests {
 		});
 	}
 
+	@Test
+	void jsonComponentThatInjectsObjectMapperCausesBeanCurrentlyInCreationException() {
+		this.contextRunner.withUserConfiguration(CircularDependencySerializerConfiguration.class).run((context) -> {
+			assertThat(context).hasFailed();
+			assertThat(context).getFailure().hasRootCauseInstanceOf(BeanCurrentlyInCreationException.class);
+		});
+	}
+
+	@Test
+	void shouldRegisterPropertyNamingStrategyHints() {
+		shouldRegisterPropertyNamingStrategyHints(PropertyNamingStrategies.class, "LOWER_CAMEL_CASE",
+				"UPPER_CAMEL_CASE", "SNAKE_CASE", "UPPER_SNAKE_CASE", "LOWER_CASE", "KEBAB_CASE", "LOWER_DOT_CASE");
+	}
+
+	private void shouldRegisterPropertyNamingStrategyHints(Class<?> type, String... fieldNames) {
+		RuntimeHints hints = new RuntimeHints();
+		new JacksonAutoConfigurationRuntimeHints().registerHints(hints, getClass().getClassLoader());
+		ReflectionHintsPredicates reflection = RuntimeHintsPredicates.reflection();
+		Stream.of(fieldNames).map((name) -> reflection.onField(type, name))
+				.forEach((predicate) -> assertThat(predicate).accepts(hints));
+	}
+
 	private void assertParameterNamesModuleCreatorBinding(Mode expectedMode, Class<?>... configClasses) {
 		this.contextRunner.withUserConfiguration(configClasses).run((context) -> {
 			DeserializationConfig deserializationConfig = context.getBean(ObjectMapper.class)
@@ -591,7 +636,7 @@ class JacksonAutoConfigurationTests {
 
 	static class CustomModule extends SimpleModule {
 
-		private Set<ObjectCodec> owners = new HashSet<>();
+		private final Set<ObjectCodec> owners = new HashSet<>();
 
 		@Override
 		public void setupModule(SetupContext context) {
@@ -629,6 +674,36 @@ class JacksonAutoConfigurationTests {
 		void setBirthDate(Date birthDate) {
 			this.birthDate = birthDate;
 		}
+
+	}
+
+	@JsonMixin(type = Person.class)
+	static class EmptyMixin {
+
+	}
+
+	@AutoConfigurationPackage
+	static class MixinConfiguration {
+
+	}
+
+	@JsonComponent
+	static class CircularDependencySerializer extends JsonSerializer<String> {
+
+		CircularDependencySerializer(ObjectMapper objectMapper) {
+
+		}
+
+		@Override
+		public void serialize(String value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+
+		}
+
+	}
+
+	@Import(CircularDependencySerializer.class)
+	@Configuration(proxyBeanMethods = false)
+	static class CircularDependencySerializerConfiguration {
 
 	}
 

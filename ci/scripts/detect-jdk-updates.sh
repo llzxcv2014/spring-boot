@@ -8,25 +8,21 @@ report_error() {
 trap 'report_error $? $LINENO' ERR
 
 case "$JDK_VERSION" in
-	java8)
-		 BASE_URL="https://api.adoptium.net/v3/assets/feature_releases/8/ga"
-		 ISSUE_TITLE="Upgrade Java 8 version in CI image"
-	;;
-	java11)
-		 BASE_URL="https://api.adoptium.net/v3/assets/feature_releases/11/ga"
-		 ISSUE_TITLE="Upgrade Java 11 version in CI image"
-	;;
 	java17)
-		 BASE_URL="https://api.adoptium.net/v3/assets/feature_releases/17/ea"
-		 ISSUE_TITLE="Upgrade Java 17 version in CI image"
+		 BASE_URL="https://api.bell-sw.com/v1/liberica/releases?version-feature=17"
+		 ISSUE_TITLE="Upgrade Java 17 version in CI image and .sdkmanrc"
+	;;
+	java19)
+		 BASE_URL="https://api.bell-sw.com/v1/liberica/releases?version-feature=19"
+		 ISSUE_TITLE="Upgrade Java 19 version in CI image"
 	;;
 	*)
 		echo $"Unknown java version"
 		exit 1;
 esac
 
-response=$( curl -s ${BASE_URL}\?architecture\=x64\&heap_size\=normal\&image_type\=jdk\&jvm_impl\=hotspot\&os\=linux\&sort_order\=DESC\&vendor\=adoptium )
-latest=$( jq -r '.[0].binaries[0].package.link' <<< "$response" )
+response=$( curl -s ${BASE_URL}\&arch\=x86\&bitness\=64\&bundle-type\=jdk\&os\=linux\&package-type\=tar.gz\&version-modifier\=latest )
+latest=$( jq -r '.[0].downloadUrl' <<< "$response" )
 if [[ ${latest} = "null" || ${latest} = "" ]]; then
 	echo "Could not parse JDK response: $response"
 	exit 1;

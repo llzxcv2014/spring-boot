@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 package smoketest.security.method;
 
-import java.util.Date;
-import java.util.Map;
+import jakarta.servlet.DispatcherType;
 
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -27,19 +26,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.access.annotation.Secured;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @SpringBootApplication
-@EnableGlobalMethodSecurity(securedEnabled = true)
+@EnableMethodSecurity(securedEnabled = true)
 public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 
 	@Override
@@ -58,7 +56,7 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 
 		@SuppressWarnings("deprecation")
 		@Bean
-		public InMemoryUserDetailsManager inMemoryUserDetailsManager() throws Exception {
+		public InMemoryUserDetailsManager inMemoryUserDetailsManager() {
 			return new InMemoryUserDetailsManager(
 					User.withDefaultPasswordEncoder().username("admin").password("admin")
 							.roles("ADMIN", "USER", "ACTUATOR").build(),
@@ -71,17 +69,15 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 	protected static class ApplicationSecurity {
 
 		@Bean
-		SecurityFilterChain appSecurity(HttpSecurity http) throws Exception {
-			http.authorizeRequests((requests) -> {
-				requests.antMatchers("/login").permitAll();
+		SecurityFilterChain configure(HttpSecurity http) throws Exception {
+			http.csrf().disable();
+			http.authorizeHttpRequests((requests) -> {
+				requests.dispatcherTypeMatchers(DispatcherType.FORWARD).permitAll();
 				requests.anyRequest().fullyAuthenticated();
 			});
-			http.formLogin((form) -> {
-				form.loginPage("/login");
-				form.failureUrl("/login?error");
-			});
-			http.logout((logout) -> logout.logoutRequestMatcher(new AntPathRequestMatcher("/logout")));
-			http.exceptionHandling((exceptions) -> exceptions.accessDeniedPage("/access?error"));
+			http.httpBasic();
+			http.formLogin((form) -> form.loginPage("/login").permitAll());
+			http.exceptionHandling((exceptions) -> exceptions.accessDeniedPage("/access"));
 			return http.build();
 		}
 
@@ -93,8 +89,9 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 
 		@Bean
 		SecurityFilterChain actuatorSecurity(HttpSecurity http) throws Exception {
-			http.requestMatcher(EndpointRequest.toAnyEndpoint());
-			http.authorizeRequests((requests) -> requests.anyRequest().authenticated());
+			http.csrf().disable();
+			http.securityMatcher(EndpointRequest.toAnyEndpoint());
+			http.authorizeHttpRequests((requests) -> requests.anyRequest().authenticated());
 			http.httpBasic();
 			return http.build();
 		}
@@ -106,10 +103,7 @@ public class SampleMethodSecurityApplication implements WebMvcConfigurer {
 
 		@GetMapping("/")
 		@Secured("ROLE_ADMIN")
-		public String home(Map<String, Object> model) {
-			model.put("message", "Hello World");
-			model.put("title", "Hello Home");
-			model.put("date", new Date());
+		public String home() {
 			return "home";
 		}
 

@@ -6,6 +6,14 @@ plugins {
 }
 
 repositories {
+	exclusiveContent {
+		forRepository {
+			maven { url '{systemTestMavenRepository}' }
+		}
+		filter {
+			includeGroup "org.springframework.boot"
+		}
+	}
 	mavenCentral()
 	maven { url 'https://repo.spring.io/milestone' }
 	maven { url 'https://repo.spring.io/snapshot' }
@@ -29,5 +37,6 @@ application {
 }
 
 bootBuildImage {
-	archiveFile = new File("${buildDir}/distributions/${project.name}-boot.zip")
+	archiveFile = bootDistZip.archiveFile
+	environment = ['BP_JVM_VERSION': project.targetCompatibility.getMajorVersion()]
 }

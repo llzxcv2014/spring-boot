@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -92,7 +93,7 @@ abstract class AbstractPackagerTests<P extends Packager> {
 	protected TestJarFile testJarFile;
 
 	@BeforeEach
-	void setup() throws IOException {
+	void setup() {
 		this.testJarFile = new TestJarFile(this.tempDir);
 	}
 
@@ -234,7 +235,7 @@ abstract class AbstractPackagerTests<P extends Packager> {
 		String index = getPackagedEntryContent("BOOT-INF/classpath.idx");
 		String[] libraries = index.split("\\r?\\n");
 		List<String> expected = Stream.of(libJarFile1, libJarFile2, libJarFile3)
-				.map((jar) -> "- \"BOOT-INF/lib/" + jar.getName() + "\"").collect(Collectors.toList());
+				.map((jar) -> "- \"BOOT-INF/lib/" + jar.getName() + "\"").toList();
 		assertThat(Arrays.asList(libraries)).containsExactlyElementsOf(expected);
 	}
 
@@ -265,7 +266,7 @@ abstract class AbstractPackagerTests<P extends Packager> {
 		assertThat(hasPackagedEntry("BOOT-INF/classpath.idx")).isTrue();
 		String classpathIndex = getPackagedEntryContent("BOOT-INF/classpath.idx");
 		List<String> expectedClasspathIndex = Stream.of(libJarFile1, libJarFile2, libJarFile3)
-				.map((file) -> "- \"BOOT-INF/lib/" + file.getName() + "\"").collect(Collectors.toList());
+				.map((file) -> "- \"BOOT-INF/lib/" + file.getName() + "\"").toList();
 		assertThat(Arrays.asList(classpathIndex.split("\\n"))).containsExactlyElementsOf(expectedClasspathIndex);
 		assertThat(hasPackagedEntry("BOOT-INF/layers.idx")).isTrue();
 		String layersIndex = getPackagedEntryContent("BOOT-INF/layers.idx");
@@ -485,6 +486,18 @@ abstract class AbstractPackagerTests<P extends Packager> {
 	}
 
 	@Test
+	void metaInfServicesFilesAreMovedBeneathBootInfClassesWhenRepackaged() throws Exception {
+		this.testJarFile.addClass("A.class", ClassWithMainMethod.class);
+		File service = new File(this.tempDir, "com.example.Service");
+		service.createNewFile();
+		this.testJarFile.addFile("META-INF/services/com.example.Service", service);
+		P packager = createPackager();
+		execute(packager, NO_LIBRARIES);
+		assertThat(getPackagedEntry("META-INF/services/com.example.Service")).isNull();
+		assertThat(getPackagedEntry("BOOT-INF/classes/META-INF/services/com.example.Service")).isNotNull();
+	}
+
+	@Test
 	void allEntriesUseUnixPlatformAndUtf8NameEncoding() throws IOException {
 		this.testJarFile.addClass("A.class", ClassWithMainMethod.class);
 		P packager = createPackager();
@@ -602,6 +615,43 @@ abstract class AbstractPackagerTests<P extends Packager> {
 		assertThat(packagedEntryNames).containsExactly("WEB-INF/lib/" + libraryTwo.getName());
 	}
 
+	@Test
+	void nativeImageArgFileWithExcludesIsWritten() throws Exception {
+		this.testJarFile.addClass("com/example/Application.class", ClassWithMainMethod.class);
+		File libraryOne = createLibraryJar();
+		File libraryTwo = createLibraryJar();
+		File libraryThree = createLibraryJar();
+		File libraryFour = createLibraryJar();
+		this.testJarFile.addFile("META-INF/native-image/com.example.one/lib-one/123/reachability-metadata.properties",
+				new ByteArrayInputStream("override=true\n".getBytes(StandardCharsets.ISO_8859_1)));
+		this.testJarFile.addFile("META-INF/native-image/com.example.two/lib-two/123/reachability-metadata.properties",
+				new ByteArrayInputStream("override=true\n".getBytes(StandardCharsets.ISO_8859_1)));
+		this.testJarFile.addFile(
+				"META-INF/native-image/com.example.three/lib-three/123/reachability-metadata.properties",
+				new ByteArrayInputStream("other=test\n".getBytes(StandardCharsets.ISO_8859_1)));
+		P packager = createPackager(this.testJarFile.getFile());
+		execute(packager, (callback) -> {
+			callback.library(new Library(null, libraryOne, LibraryScope.COMPILE,
+					LibraryCoordinates.of("com.example.one", "lib-one", "123"), false, false, true));
+			callback.library(new Library(null, libraryTwo, LibraryScope.COMPILE,
+					LibraryCoordinates.of("com.example.two", "lib-two", "123"), false, false, true));
+			callback.library(new Library(null, libraryThree, LibraryScope.COMPILE,
+					LibraryCoordinates.of("com.example.three", "lib-three", "123"), false, false, true));
+			callback.library(new Library(null, libraryFour, LibraryScope.COMPILE,
+					LibraryCoordinates.of("com.example.four", "lib-four", "123"), false, false, true));
+		});
+
+		List<String> expected = new ArrayList<>();
+		expected.add("--exclude-config");
+		expected.add("\\Q" + libraryOne.getName() + "\\E");
+		expected.add("^/META-INF/native-image/.*");
+		expected.add("--exclude-config");
+		expected.add("\\Q" + libraryTwo.getName() + "\\E");
+		expected.add("^/META-INF/native-image/.*");
+		assertThat(getPackagedEntryContent("META-INF/native-image/argfile"))
+				.isEqualTo(expected.stream().collect(Collectors.joining("\n")) + "\n");
+	}
+
 	private File createLibraryJar() throws IOException {
 		TestJarFile library = new TestJarFile(this.tempDir);
 		library.addClass("com/example/library/Library.class", ClassWithoutMainMethod.class);
@@ -616,7 +666,7 @@ abstract class AbstractPackagerTests<P extends Packager> {
 		return new Library(null, file, scope, null, unpackRequired, false, included);
 	}
 
-	protected final P createPackager() throws IOException {
+	protected final P createPackager() {
 		return createPackager(this.testJarFile.getFile());
 	}
 
@@ -625,7 +675,8 @@ abstract class AbstractPackagerTests<P extends Packager> {
 	protected abstract void execute(P packager, Libraries libraries) throws IOException;
 
 	protected Collection<String> getPackagedEntryNames() throws IOException {
-		return getAllPackagedEntries().stream().map(ZipArchiveEntry::getName).collect(Collectors.toList());
+		return getAllPackagedEntries().stream().map(ZipArchiveEntry::getName)
+				.collect(Collectors.toCollection(ArrayList::new));
 	}
 
 	protected boolean hasPackagedLauncherClasses() throws IOException {
@@ -671,9 +722,9 @@ abstract class AbstractPackagerTests<P extends Packager> {
 
 		private static final Layer DEFAULT_LAYER = new Layer("default");
 
-		private Set<Layer> layers = new LinkedHashSet<>();
+		private final Set<Layer> layers = new LinkedHashSet<>();
 
-		private Map<String, Layer> libraries = new HashMap<>();
+		private final Map<String, Layer> libraries = new HashMap<>();
 
 		TestLayers() {
 			this.layers.add(DEFAULT_LAYER);

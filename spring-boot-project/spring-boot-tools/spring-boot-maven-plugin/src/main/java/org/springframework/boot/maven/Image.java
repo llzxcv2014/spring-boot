@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.boot.maven;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.apache.maven.artifact.Artifact;
 
@@ -40,6 +39,8 @@ import org.springframework.util.StringUtils;
  * @author Phillip Webb
  * @author Scott Frederick
  * @author Jeroen Meijer
+ * @author Rafael Ceccone
+ * @author Julian Liebig
  * @since 2.3.0
  */
 public class Image {
@@ -65,6 +66,12 @@ public class Image {
 	List<String> bindings;
 
 	String network;
+
+	List<String> tags;
+
+	CacheInfo buildCache;
+
+	CacheInfo launchCache;
 
 	/**
 	 * The name of the created image.
@@ -199,13 +206,21 @@ public class Image {
 			request = request.withPublish(this.publish);
 		}
 		if (!CollectionUtils.isEmpty(this.buildpacks)) {
-			request = request
-					.withBuildpacks(this.buildpacks.stream().map(BuildpackReference::of).collect(Collectors.toList()));
+			request = request.withBuildpacks(this.buildpacks.stream().map(BuildpackReference::of).toList());
 		}
 		if (!CollectionUtils.isEmpty(this.bindings)) {
-			request = request.withBindings(this.bindings.stream().map(Binding::of).collect(Collectors.toList()));
+			request = request.withBindings(this.bindings.stream().map(Binding::of).toList());
 		}
 		request = request.withNetwork(this.network);
+		if (!CollectionUtils.isEmpty(this.tags)) {
+			request = request.withTags(this.tags.stream().map(ImageReference::of).toList());
+		}
+		if (this.buildCache != null) {
+			request = request.withBuildCache(this.buildCache.asCache());
+		}
+		if (this.launchCache != null) {
+			request = request.withLaunchCache(this.launchCache.asCache());
+		}
 		return request;
 	}
 

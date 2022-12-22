@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
@@ -249,11 +249,11 @@ public final class EndpointRequest {
 		}
 
 		private EndpointId getEndpointId(Object source) {
-			if (source instanceof EndpointId) {
-				return (EndpointId) source;
+			if (source instanceof EndpointId endpointId) {
+				return endpointId;
 			}
-			if (source instanceof String) {
-				return (EndpointId.of((String) source));
+			if (source instanceof String string) {
+				return EndpointId.of(string);
 			}
 			if (source instanceof Class) {
 				return getEndpointId((Class<?>) source);
@@ -270,7 +270,7 @@ public final class EndpointRequest {
 		private List<RequestMatcher> getDelegateMatchers(RequestMatcherFactory requestMatcherFactory,
 				RequestMatcherProvider matcherProvider, Set<String> paths) {
 			return paths.stream().map((path) -> requestMatcherFactory.antPath(matcherProvider, path, "/**"))
-					.collect(Collectors.toList());
+					.collect(Collectors.toCollection(ArrayList::new));
 		}
 
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import javax.sql.DataSource;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.aot.AotDetector;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
@@ -33,14 +34,14 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
 import org.springframework.beans.factory.support.RootBeanDefinition;
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.jdbc.EmbeddedDatabaseConnection;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -58,8 +59,7 @@ import org.springframework.util.ObjectUtils;
  * @since 1.4.0
  * @see AutoConfigureTestDatabase
  */
-@Configuration(proxyBeanMethods = false)
-@AutoConfigureBefore(DataSourceAutoConfiguration.class)
+@AutoConfiguration(before = DataSourceAutoConfiguration.class)
 public class TestDatabaseAutoConfiguration {
 
 	@Bean
@@ -70,19 +70,23 @@ public class TestDatabaseAutoConfiguration {
 	}
 
 	@Bean
+	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 	@ConditionalOnProperty(prefix = "spring.test.database", name = "replace", havingValue = "ANY",
 			matchIfMissing = true)
-	public static EmbeddedDataSourceBeanFactoryPostProcessor embeddedDataSourceBeanFactoryPostProcessor() {
+	static EmbeddedDataSourceBeanFactoryPostProcessor embeddedDataSourceBeanFactoryPostProcessor() {
 		return new EmbeddedDataSourceBeanFactoryPostProcessor();
 	}
 
 	@Order(Ordered.LOWEST_PRECEDENCE)
-	private static class EmbeddedDataSourceBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+	static class EmbeddedDataSourceBeanFactoryPostProcessor implements BeanDefinitionRegistryPostProcessor {
 
 		private static final Log logger = LogFactory.getLog(EmbeddedDataSourceBeanFactoryPostProcessor.class);
 
 		@Override
 		public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+			if (AotDetector.useGeneratedArtifacts()) {
+				return;
+			}
 			Assert.isInstanceOf(ConfigurableListableBeanFactory.class, registry,
 					"Test Database Auto-configuration can only be used with a ConfigurableListableBeanFactory");
 			process(registry, (ConfigurableListableBeanFactory) registry);
@@ -133,8 +137,7 @@ public class TestDatabaseAutoConfiguration {
 
 	}
 
-	private static class EmbeddedDataSourceFactoryBean
-			implements FactoryBean<DataSource>, EnvironmentAware, InitializingBean {
+	static class EmbeddedDataSourceFactoryBean implements FactoryBean<DataSource>, EnvironmentAware, InitializingBean {
 
 		private EmbeddedDataSourceFactory factory;
 
@@ -167,18 +170,17 @@ public class TestDatabaseAutoConfiguration {
 
 	}
 
-	private static class EmbeddedDataSourceFactory {
+	static class EmbeddedDataSourceFactory {
 
 		private final Environment environment;
 
 		EmbeddedDataSourceFactory(Environment environment) {
 			this.environment = environment;
-			if (environment instanceof ConfigurableEnvironment) {
+			if (environment instanceof ConfigurableEnvironment configurableEnvironment) {
 				Map<String, Object> source = new HashMap<>();
 				source.put("spring.datasource.schema-username", "");
 				source.put("spring.sql.init.username", "");
-				((ConfigurableEnvironment) environment).getPropertySources()
-						.addFirst(new MapPropertySource("testDatabase", source));
+				configurableEnvironment.getPropertySources().addFirst(new MapPropertySource("testDatabase", source));
 			}
 		}
 

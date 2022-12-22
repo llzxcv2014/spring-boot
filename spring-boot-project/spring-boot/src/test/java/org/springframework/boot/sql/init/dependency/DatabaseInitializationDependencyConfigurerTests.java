@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,9 +52,9 @@ import org.springframework.mock.env.MockEnvironment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link DatabaseInitializationDependencyConfigurer}.
@@ -81,10 +80,8 @@ class DatabaseInitializationDependencyConfigurerTests {
 	void beanFactoryPostProcessorHasOrderAllowingSubsequentPostProcessorsToFineTuneDependencies() {
 		performDetection(Arrays.asList(MockDatabaseInitializerDetector.class,
 				MockedDependsOnDatabaseInitializationDetector.class), (context) -> {
-					BeanDefinition alpha = BeanDefinitionBuilder.genericBeanDefinition(String.class)
-							.getBeanDefinition();
-					BeanDefinition bravo = BeanDefinitionBuilder.genericBeanDefinition(String.class)
-							.getBeanDefinition();
+					BeanDefinition alpha = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+					BeanDefinition bravo = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
 					context.register(DependsOnCaptor.class);
 					context.register(DependencyConfigurerConfiguration.class);
 					context.registerBeanDefinition("alpha", alpha);
@@ -104,8 +101,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 	void whenDetectorsAreCreatedThenTheEnvironmentCanBeInjected() {
 		performDetection(Arrays.asList(ConstructorInjectionDatabaseInitializerDetector.class,
 				ConstructorInjectionDependsOnDatabaseInitializationDetector.class), (context) -> {
-					BeanDefinition alpha = BeanDefinitionBuilder.genericBeanDefinition(String.class)
-							.getBeanDefinition();
+					BeanDefinition alpha = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
 					context.registerBeanDefinition("alpha", alpha);
 					context.register(DependencyConfigurerConfiguration.class);
 					context.refresh();
@@ -117,8 +113,8 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	@Test
 	void whenDependenciesAreConfiguredThenBeansThatDependUponDatabaseInitializationDependUponDetectedDatabaseInitializers() {
-		BeanDefinition alpha = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
-		BeanDefinition bravo = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition alpha = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition bravo = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
 		performDetection(Arrays.asList(MockDatabaseInitializerDetector.class,
 				MockedDependsOnDatabaseInitializationDetector.class), (context) -> {
 					context.registerBeanDefinition("alpha", alpha);
@@ -132,7 +128,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 					assertThat(alpha.getAttribute(DatabaseInitializerDetector.class.getName()))
 							.isEqualTo(MockDatabaseInitializerDetector.class.getName());
 					assertThat(bravo.getAttribute(DatabaseInitializerDetector.class.getName())).isNull();
-					verify(MockDatabaseInitializerDetector.instance).detectionComplete(context.getBeanFactory(),
+					then(MockDatabaseInitializerDetector.instance).should().detectionComplete(context.getBeanFactory(),
 							Collections.singleton("alpha"));
 					assertThat(bravo.getDependsOn()).containsExactly("alpha");
 				});
@@ -140,11 +136,11 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	@Test
 	void whenDependenciesAreConfiguredDetectedDatabaseInitializersAreInitializedInCorrectOrder() {
-		BeanDefinition alpha = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
-		BeanDefinition bravo1 = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
-		BeanDefinition bravo2 = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
-		BeanDefinition charlie = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
-		BeanDefinition delta = BeanDefinitionBuilder.genericBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition alpha = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition bravo1 = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition bravo2 = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition charlie = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+		BeanDefinition delta = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
 		performDetection(
 				Arrays.asList(MockDatabaseInitializerDetector.class, OrderedLowestMockDatabaseInitializerDetector.class,
 						OrderedNearLowestMockDatabaseInitializerDetector.class,
@@ -171,6 +167,35 @@ class DatabaseInitializationDependencyConfigurerTests {
 					assertThat(bravo2.getDependsOn()).containsExactly("alpha");
 					assertThat(alpha.getDependsOn()).isNullOrEmpty();
 				});
+	}
+
+	@Test
+	void whenInAnAotProcessedContextDependsOnDatabaseInitializationPostProcessorDoesNothing() {
+		withAotEnabled(() -> {
+			BeanDefinition alpha = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+			BeanDefinition bravo = BeanDefinitionBuilder.rootBeanDefinition(String.class).getBeanDefinition();
+			performDetection(Arrays.asList(MockDatabaseInitializerDetector.class,
+					MockedDependsOnDatabaseInitializationDetector.class), (context) -> {
+						context.registerBeanDefinition("alpha", alpha);
+						context.registerBeanDefinition("bravo", bravo);
+						context.register(DependencyConfigurerConfiguration.class);
+						context.refresh();
+						assertThat(alpha.getAttribute(DatabaseInitializerDetector.class.getName())).isNull();
+						assertThat(bravo.getAttribute(DatabaseInitializerDetector.class.getName())).isNull();
+						then(MockDatabaseInitializerDetector.instance).shouldHaveNoInteractions();
+						assertThat(bravo.getDependsOn()).isNull();
+					});
+		});
+	}
+
+	private void withAotEnabled(Runnable action) {
+		System.setProperty("spring.aot.enabled", "true");
+		try {
+			action.run();
+		}
+		finally {
+			System.clearProperty("spring.aot.enabled");
+		}
 	}
 
 	private void performDetection(Collection<Class<?>> detectors,
@@ -223,7 +248,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	static class MockDatabaseInitializerDetector implements DatabaseInitializerDetector {
 
-		private static DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
+		private static final DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
 
 		@Override
 		public Set<String> detect(ConfigurableListableBeanFactory beanFactory) {
@@ -240,7 +265,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	static class OrderedLowestMockDatabaseInitializerDetector implements DatabaseInitializerDetector {
 
-		private static DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
+		private static final DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
 
 		@Override
 		public Set<String> detect(ConfigurableListableBeanFactory beanFactory) {
@@ -256,7 +281,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	static class OrderedNearLowestMockDatabaseInitializerDetector implements DatabaseInitializerDetector {
 
-		private static DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
+		private static final DatabaseInitializerDetector instance = mock(DatabaseInitializerDetector.class);
 
 		@Override
 		public Set<String> detect(ConfigurableListableBeanFactory beanFactory) {
@@ -272,7 +297,7 @@ class DatabaseInitializationDependencyConfigurerTests {
 
 	static class MockedDependsOnDatabaseInitializationDetector implements DependsOnDatabaseInitializationDetector {
 
-		private static DependsOnDatabaseInitializationDetector instance = mock(
+		private static final DependsOnDatabaseInitializationDetector instance = mock(
 				DependsOnDatabaseInitializationDetector.class);
 
 		@Override
@@ -314,11 +339,10 @@ class DatabaseInitializationDependencyConfigurerTests {
 				return super.findResources(name);
 			}
 			Properties properties = new Properties();
-			properties.put(DatabaseInitializerDetector.class.getName(), String.join(",",
-					this.databaseInitializerDetectors.stream().map(Class::getName).collect(Collectors.toList())));
-			properties.put(DependsOnDatabaseInitializationDetector.class.getName(),
-					String.join(",", this.dependsOnDatabaseInitializationDetectors.stream().map(Class::getName)
-							.collect(Collectors.toList())));
+			properties.put(DatabaseInitializerDetector.class.getName(),
+					String.join(",", this.databaseInitializerDetectors.stream().map(Class::getName).toList()));
+			properties.put(DependsOnDatabaseInitializationDetector.class.getName(), String.join(",",
+					this.dependsOnDatabaseInitializationDetectors.stream().map(Class::getName).toList()));
 			File springFactories = new File(this.temp, "spring.factories");
 			try (FileWriter writer = new FileWriter(springFactories)) {
 				properties.store(writer, "");

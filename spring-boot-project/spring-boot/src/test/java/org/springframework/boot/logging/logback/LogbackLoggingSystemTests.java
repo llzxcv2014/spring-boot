@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +43,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.ILoggerFactory;
+import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
-import org.slf4j.impl.StaticLoggerBinder;
 
+import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.logging.AbstractLoggingSystemTests;
 import org.springframework.boot.logging.LogFile;
@@ -54,6 +55,7 @@ import org.springframework.boot.logging.LoggerConfiguration;
 import org.springframework.boot.logging.LoggingInitializationContext;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.boot.logging.LoggingSystemProperties;
+import org.springframework.boot.testsupport.classpath.ClassPathOverrides;
 import org.springframework.boot.testsupport.system.CapturedOutput;
 import org.springframework.boot.testsupport.system.OutputCaptureExtension;
 import org.springframework.core.convert.ConversionService;
@@ -67,9 +69,9 @@ import org.springframework.util.StringUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.contentOf;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link LogbackLoggingSystem}.
@@ -82,6 +84,7 @@ import static org.mockito.Mockito.verify;
  * @author Vedran Pavic
  * @author Robert Thornton
  * @author Eddú Meléndez
+ * @author Scott Frederick
  */
 @ExtendWith(OutputCaptureExtension.class)
 class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
@@ -102,7 +105,7 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 		System.getProperties().remove(LoggingSystemProperties.FILE_LOG_CHARSET);
 		this.systemPropertyNames = new HashSet<>(System.getProperties().keySet());
 		this.loggingSystem.cleanUp();
-		this.logger = ((LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory()).getLogger(getClass());
+		this.logger = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(getClass());
 		this.environment = new MockEnvironment();
 		ConversionService conversionService = ApplicationConversionService.getSharedInstance();
 		this.environment.setConversionService((ConfigurableConversionService) conversionService);
@@ -113,7 +116,24 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 	void cleanUp() {
 		System.getProperties().keySet().retainAll(this.systemPropertyNames);
 		this.loggingSystem.cleanUp();
-		((LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory()).stop();
+		((LoggerContext) LoggerFactory.getILoggerFactory()).stop();
+	}
+
+	@Test
+	@ClassPathOverrides("org.jboss.logging:jboss-logging:3.5.0.Final")
+	void jbossLoggingRoutesThroughLog4j2ByDefault() {
+		System.getProperties().remove("org.jboss.logging.provider");
+		org.jboss.logging.Logger jbossLogger = org.jboss.logging.Logger.getLogger(getClass());
+		assertThat(jbossLogger.getClass().getName()).isEqualTo("org.jboss.logging.Log4j2Logger");
+	}
+
+	@Test
+	@ClassPathOverrides("org.jboss.logging:jboss-logging:3.5.0.Final")
+	void jbossLoggingRoutesThroughSlf4jWhenLoggingSystemIsInitialized() {
+		this.loggingSystem.beforeInitialize();
+		initialize(this.initializationContext, null, null);
+		assertThat(org.jboss.logging.Logger.getLogger(getClass()).getClass().getName())
+				.isEqualTo("org.jboss.logging.Slf4jLocationAwareLogger");
 	}
 
 	@Test
@@ -242,7 +262,7 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 	void getLoggingConfigurationForALL() {
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		Logger logger = (Logger) StaticLoggerBinder.getSingleton().getLoggerFactory().getLogger(getClass().getName());
+		Logger logger = (Logger) LoggerFactory.getILoggerFactory().getLogger(getClass().getName());
 		logger.setLevel(Level.ALL);
 		LoggerConfiguration configuration = this.loggingSystem.getLoggerConfiguration(getClass().getName());
 		assertThat(configuration)
@@ -254,7 +274,7 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
 		this.loggingSystem.setLogLevel(getClass().getName(), LogLevel.TRACE);
-		Logger logger = (Logger) StaticLoggerBinder.getSingleton().getLoggerFactory().getLogger(getClass().getName());
+		Logger logger = (Logger) LoggerFactory.getILoggerFactory().getLogger(getClass().getName());
 		assertThat(logger.getLevel()).isEqualTo(Level.TRACE);
 	}
 
@@ -515,12 +535,13 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 		this.environment.setProperty("logging.logback.rollingpolicy.max-history", "20");
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
+		LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
 		Map<String, String> properties = loggerContext.getCopyOfPropertyMap();
-		Set<String> expectedProperties = new HashSet<String>();
+		Set<String> expectedProperties = new HashSet<>();
 		ReflectionUtils.doWithFields(LogbackLoggingSystemProperties.class,
 				(field) -> expectedProperties.add((String) field.get(null)), this::isPublicStaticFinal);
 		expectedProperties.removeAll(Arrays.asList("LOG_FILE", "LOG_PATH"));
+		expectedProperties.add("org.jboss.logging.provider");
 		assertThat(properties).containsOnlyKeys(expectedProperties);
 		assertThat(properties).containsEntry("CONSOLE_LOG_CHARSET", Charset.defaultCharset().name());
 	}
@@ -532,42 +553,49 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 
 	@Test
 	void initializationIsOnlyPerformedOnceUntilCleanedUp() {
-		LoggerContext loggerContext = (LoggerContext) StaticLoggerBinder.getSingleton().getLoggerFactory();
+		LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
 		LoggerContextListener listener = mock(LoggerContextListener.class);
 		loggerContext.addListener(listener);
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		verify(listener, times(1)).onReset(loggerContext);
+		then(listener).should().onReset(loggerContext);
 		this.loggingSystem.cleanUp();
 		loggerContext.addListener(listener);
 		this.loggingSystem.beforeInitialize();
 		initialize(this.initializationContext, null, null);
-		verify(listener, times(2)).onReset(loggerContext);
+		then(listener).should(times(2)).onReset(loggerContext);
+	}
+
+	@Test
+	void testDateformatPatternDefault(CapturedOutput output) {
+		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
+		initialize(loggingInitializationContext, null, null);
+		this.logger.info("Hello world");
+		assertThat(getLineWithText(output, "Hello world"))
+				.containsPattern("\\d{4}-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}([-+]\\d{2}:\\d{2}|Z)");
 	}
 
 	@Test
 	void testDateformatPatternProperty(CapturedOutput output) {
-		this.environment.setProperty("logging.pattern.dateformat", "yyyy-MM-dd'T'hh:mm:ss.SSSZ");
+		this.environment.setProperty("logging.pattern.dateformat", "dd-MM-yyyy");
 		new LoggingSystemProperties(this.environment).apply();
 		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
 		initialize(loggingInitializationContext, null, null);
 		this.logger.info("Hello world");
-		assertThat(getLineWithText(output, "Hello world"))
-				.containsPattern("\\d{4}-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}");
+		assertThat(getLineWithText(output, "Hello world")).containsPattern("\\d{2}-\\d{2}-\\d{4}\\s");
 	}
 
 	@Test // gh-24835
 	void testDateformatPatternPropertyDirect(CapturedOutput output) {
-		this.environment.setProperty("logging.pattern.dateformat", "yyyy'T'hh:mm:ss.SSSZ");
+		this.environment.setProperty("logging.pattern.dateformat", "yyyy");
 		new LoggingSystemProperties(this.environment).apply();
-		this.environment.setProperty("logging.pattern.dateformat", "yyyy-MM-dd'T'hh:mm:ss.SSSZ");
+		this.environment.setProperty("logging.pattern.dateformat", "dd-MM-yyyy");
 		LoggingInitializationContext loggingInitializationContext = new LoggingInitializationContext(this.environment);
 		initialize(loggingInitializationContext, null, null);
 		this.logger.info("Hello world");
-		assertThat(getLineWithText(output, "Hello world"))
-				.containsPattern("\\d{4}-\\d{2}\\-\\d{2}T\\d{2}:\\d{2}:\\d{2}");
+		assertThat(getLineWithText(output, "Hello world")).containsPattern("\\d{2}-\\d{2}-\\d{4}\\s");
 	}
 
 	@Test
@@ -621,13 +649,29 @@ class LogbackLoggingSystemTests extends AbstractLoggingSystemTests {
 		assertThat(encoder.getCharset()).isEqualTo(StandardCharsets.UTF_16);
 	}
 
+	@Test
+	void whenContextHasNoAotContributionThenProcessAheadOfTimeReturnsNull() {
+		BeanFactoryInitializationAotContribution contribution = this.loggingSystem.processAheadOfTime(null);
+		assertThat(contribution).isNull();
+	}
+
+	@Test
+	void whenContextHasAotContributionThenProcessAheadOfTimeClearsAndReturnsIt() {
+		LoggerContext context = ((LoggerContext) LoggerFactory.getILoggerFactory());
+		context.putObject(BeanFactoryInitializationAotContribution.class.getName(),
+				mock(BeanFactoryInitializationAotContribution.class));
+		BeanFactoryInitializationAotContribution contribution = this.loggingSystem.processAheadOfTime(null);
+		assertThat(context.getObject(BeanFactoryInitializationAotContribution.class.getName())).isNull();
+		assertThat(contribution).isNotNull();
+	}
+
 	private void initialize(LoggingInitializationContext context, String configLocation, LogFile logFile) {
 		this.loggingSystem.getSystemProperties((ConfigurableEnvironment) context.getEnvironment()).apply(logFile);
 		this.loggingSystem.initialize(context, configLocation, logFile);
 	}
 
 	private static Logger getRootLogger() {
-		ILoggerFactory factory = StaticLoggerBinder.getSingleton().getLoggerFactory();
+		ILoggerFactory factory = LoggerFactory.getILoggerFactory();
 		LoggerContext context = (LoggerContext) factory;
 		return context.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
 	}

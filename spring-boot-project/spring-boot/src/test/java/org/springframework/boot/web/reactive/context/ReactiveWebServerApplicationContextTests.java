@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import org.springframework.http.server.reactive.HttpHandler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.then;
 
 /**
  * Tests for {@link ReactiveWebServerApplicationContext}.
@@ -50,7 +50,7 @@ import static org.mockito.Mockito.verify;
  */
 class ReactiveWebServerApplicationContextTests {
 
-	private ReactiveWebServerApplicationContext context = new ReactiveWebServerApplicationContext();
+	private final ReactiveWebServerApplicationContext context = new ReactiveWebServerApplicationContext();
 
 	@AfterEach
 	void cleanUp() {
@@ -60,14 +60,15 @@ class ReactiveWebServerApplicationContextTests {
 	@Test
 	void whenThereIsNoWebServerFactoryBeanThenContextRefreshWillFail() {
 		assertThatExceptionOfType(ApplicationContextException.class).isThrownBy(() -> this.context.refresh())
-				.withMessageContaining(
-						"Unable to start ReactiveWebApplicationContext due to missing ReactiveWebServerFactory bean");
+				.havingRootCause().withMessageContaining(
+						"Unable to start ReactiveWebServerApplicationContext due to missing ReactiveWebServerFactory bean");
 	}
 
 	@Test
 	void whenThereIsNoHttpHandlerBeanThenContextRefreshWillFail() {
 		addWebServerFactoryBean();
 		assertThatExceptionOfType(ApplicationContextException.class).isThrownBy(() -> this.context.refresh())
+				.havingRootCause()
 				.withMessageContaining("Unable to start ReactiveWebApplicationContext due to missing HttpHandler bean");
 	}
 
@@ -76,7 +77,7 @@ class ReactiveWebServerApplicationContextTests {
 		addWebServerFactoryBean();
 		addWebServerFactoryBean("anotherWebServerFactory");
 		assertThatExceptionOfType(ApplicationContextException.class).isThrownBy(() -> this.context.refresh())
-				.withMessageContaining(
+				.havingRootCause().withMessageContaining(
 						"Unable to start ReactiveWebApplicationContext due to multiple ReactiveWebServerFactory beans");
 	}
 
@@ -86,7 +87,7 @@ class ReactiveWebServerApplicationContextTests {
 		addHttpHandlerBean("httpHandler1");
 		addHttpHandlerBean("httpHandler2");
 		assertThatExceptionOfType(ApplicationContextException.class).isThrownBy(() -> this.context.refresh())
-				.withMessageContaining(
+				.havingRootCause().withMessageContaining(
 						"Unable to start ReactiveWebApplicationContext due to multiple HttpHandler beans");
 	}
 
@@ -123,7 +124,7 @@ class ReactiveWebServerApplicationContextTests {
 		this.context.refresh();
 		MockReactiveWebServerFactory factory = this.context.getBean(MockReactiveWebServerFactory.class);
 		this.context.close();
-		verify(factory.getWebServer()).stop();
+		then(factory.getWebServer()).should().stop();
 	}
 
 	@Test
@@ -182,7 +183,7 @@ class ReactiveWebServerApplicationContextTests {
 
 	static class TestApplicationListener implements ApplicationListener<ApplicationEvent> {
 
-		private Deque<ApplicationEvent> events = new ArrayDeque<>();
+		private final Deque<ApplicationEvent> events = new ArrayDeque<>();
 
 		@Override
 		public void onApplicationEvent(ApplicationEvent event) {

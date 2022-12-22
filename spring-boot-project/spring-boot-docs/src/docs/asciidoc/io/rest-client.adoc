@@ -11,10 +11,7 @@ The auto-configured `RestTemplateBuilder` ensures that sensible `HttpMessageConv
 
 The following code shows a typical example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/resttemplate/MyService.java[]
-----
+include::code:MyService[]
 
 TIP: `RestTemplateBuilder` includes a number of useful methods that can be used to quickly configure a `RestTemplate`.
 For example, to add BASIC auth support, you can use `builder.basicAuthentication("user", "password").build()`.
@@ -33,22 +30,18 @@ All such beans are automatically registered with the auto-configured `RestTempla
 
 The following example shows a customizer that configures the use of a proxy for all hosts except `192.168.0.5`:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/resttemplate/customization/MyRestTemplateCustomizer.java[]
-----
+include::code:MyRestTemplateCustomizer[]
 
-Finally, you can also create your own `RestTemplateBuilder` bean.
-To prevent switching off the auto-configuration of a `RestTemplateBuilder` and prevent any `RestTemplateCustomizer` beans from being used, make sure to configure your custom instance with a `RestTemplateBuilderConfigurer`.
-The following example exposes a `RestTemplateBuilder` with what Spring Boot would auto-configure, except that custom connect and read timeouts are also specified:
+Finally, you can define your own `RestTemplateBuilder` bean.
+Doing so will replace the auto-configured builder.
+If you want any `RestTemplateCustomizer` beans to be applied to your custom builder, as the auto-configuration would have done, configure it using a `RestTemplateBuilderConfigurer`.
+The following example exposes a `RestTemplateBuilder` that matches what Spring Boot's auto-configuration would have done, except that custom connect and read timeouts are also specified:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/resttemplate/customization/MyRestTemplateBuilderConfiguration.java[]
-----
+include::code:MyRestTemplateBuilderConfiguration[]
 
 The most extreme (and rarely used) option is to create your own `RestTemplateBuilder` bean without using a configurer.
-Doing so switches off the auto-configuration of a `RestTemplateBuilder` and prevents any `RestTemplateCustomizer` beans from being used.
+In addition to replacing the auto-configured builder, this also prevents any `RestTemplateCustomizer` beans from being used.
+
 
 
 [[io.rest-client.webclient]]
@@ -63,21 +56,18 @@ Spring Boot is configuring that builder to share HTTP resources, reflect codecs 
 
 The following code shows a typical example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/webclient/MyService.java[]
-----
+include::code:MyService[]
 
 
 
 [[io.rest-client.webclient.runtime]]
 ==== WebClient Runtime
 Spring Boot will auto-detect which `ClientHttpConnector` to use to drive `WebClient`, depending on the libraries available on the application classpath.
-For now, Reactor Netty and Jetty RS client are supported.
+For now, Reactor Netty, Jetty RS client, Apache HttpClient, and the JDK's HttpClient are supported.
 
 The `spring-boot-starter-webflux` starter depends on `io.projectreactor.netty:reactor-netty` by default, which brings both server and client implementations.
 If you choose to use Jetty as a reactive server instead, you should add a dependency on the Jetty Reactive HTTP client library, `org.eclipse.jetty:jetty-reactive-httpclient`.
-Using the same technology for server and client has it advantages, as it will automatically share HTTP resources between client and server.
+Using the same technology for server and client has its advantages, as it will automatically share HTTP resources between client and server.
 
 Developers can override the resource configuration for Jetty and Reactor Netty by providing a custom `ReactorResourceFactory` or `JettyResourceFactory` bean - this will be applied to both clients and servers.
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,6 @@
  */
 
 package org.springframework.boot.autoconfigure.sql.init;
-
-import java.nio.charset.Charset;
-import java.util.List;
 
 import javax.sql.DataSource;
 
@@ -39,7 +36,6 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 import org.springframework.jdbc.datasource.init.DatabasePopulator;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SqlInitializationAutoConfigurationTests {
 
-	private ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 			.withConfiguration(AutoConfigurations.of(SqlInitializationAutoConfiguration.class)).withPropertyValues(
 					"spring.datasource.generate-unique-name:true", "spring.r2dbc.generate-unique-name:true");
 
@@ -68,17 +64,9 @@ class SqlInitializationAutoConfigurationTests {
 	}
 
 	@Test
-	@Deprecated
-	void whenConnectionFactoryIsAvailableAndInitializationIsDisabledThenInitializerIsNotAutoConfigured() {
-		this.contextRunner.withConfiguration(AutoConfigurations.of(R2dbcAutoConfiguration.class))
-				.withPropertyValues("spring.sql.init.enabled:false")
-				.run((context) -> assertThat(context).doesNotHaveBean(AbstractScriptDatabaseInitializer.class));
-	}
-
-	@Test
 	void whenConnectionFactoryIsAvailableAndModeIsNeverThenInitializerIsNotAutoConfigured() {
 		this.contextRunner.withConfiguration(AutoConfigurations.of(R2dbcAutoConfiguration.class))
-				.withInitializer(new ConditionEvaluationReportLoggingListener(LogLevel.INFO))
+				.withInitializer(ConditionEvaluationReportLoggingListener.forLogLevel(LogLevel.INFO))
 				.withPropertyValues("spring.sql.init.mode:never")
 				.run((context) -> assertThat(context).doesNotHaveBean(AbstractScriptDatabaseInitializer.class));
 	}
@@ -87,14 +75,6 @@ class SqlInitializationAutoConfigurationTests {
 	void whenDataSourceIsAvailableThenDataSourceInitializerIsAutoConfigured() {
 		this.contextRunner.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
 				.run((context) -> assertThat(context).hasSingleBean(DataSourceScriptDatabaseInitializer.class));
-	}
-
-	@Test
-	@Deprecated
-	void whenDataSourceIsAvailableAndInitializationIsDisabledThenInitializerIsNotAutoConfigured() {
-		this.contextRunner.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
-				.withPropertyValues("spring.sql.init.enabled:false")
-				.run((context) -> assertThat(context).doesNotHaveBean(AbstractScriptDatabaseInitializer.class));
 	}
 
 	@Test
@@ -170,16 +150,6 @@ class SqlInitializationAutoConfigurationTests {
 				});
 	}
 
-	@Test
-	void whenDataSourceAutoConfigurationHasDefinedAnInitializerThenAutoConfigurationBacksOff() {
-		this.contextRunner.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
-				.withPropertyValues("spring.datasource.schema=classpath:schema.sql")
-				.withInitializer(new ConditionEvaluationReportLoggingListener(LogLevel.INFO)).run((context) -> {
-					assertThat(context).hasSingleBean(SqlDataSourceScriptDatabaseInitializer.class);
-					assertThat(context).hasBean("scriptDataSourceInitializer");
-				});
-	}
-
 	@Configuration(proxyBeanMethods = false)
 	static class SqlDatabaseInitializerConfiguration {
 
@@ -188,8 +158,7 @@ class SqlInitializationAutoConfigurationTests {
 			return new SqlDataSourceScriptDatabaseInitializer(null, new DatabaseInitializationSettings()) {
 
 				@Override
-				protected void runScripts(List<Resource> resources, boolean continueOnError, String separator,
-						Charset encoding) {
+				protected void runScripts(Scripts scripts) {
 					// No-op
 				}
 
@@ -211,8 +180,7 @@ class SqlInitializationAutoConfigurationTests {
 			return new DataSourceScriptDatabaseInitializer(null, new DatabaseInitializationSettings()) {
 
 				@Override
-				protected void runScripts(List<Resource> resources, boolean continueOnError, String separator,
-						Charset encoding) {
+				protected void runScripts(Scripts scripts) {
 					// No-op
 				}
 

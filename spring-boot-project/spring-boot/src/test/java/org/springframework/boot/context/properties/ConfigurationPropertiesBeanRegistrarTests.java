@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,10 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
  */
 class ConfigurationPropertiesBeanRegistrarTests {
 
-	private BeanDefinitionRegistry registry = new DefaultListableBeanFactory();
+	private final BeanDefinitionRegistry registry = new DefaultListableBeanFactory();
 
-	private ConfigurationPropertiesBeanRegistrar registrar = new ConfigurationPropertiesBeanRegistrar(this.registry);
+	private final ConfigurationPropertiesBeanRegistrar registrar = new ConfigurationPropertiesBeanRegistrar(
+			this.registry);
 
 	@Test
 	void registerWhenNotAlreadyRegisteredAddBeanDefinition() {
@@ -102,7 +103,6 @@ class ConfigurationPropertiesBeanRegistrarTests {
 
 	}
 
-	@ConstructorBinding
 	@ConfigurationProperties("valuecp")
 	static class ValueObjectConfigurationProperties {
 

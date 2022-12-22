@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,11 +52,9 @@ class CassandraDataAutoConfigurationIntegrationTests {
 			.withConfiguration(
 					AutoConfigurations.of(CassandraAutoConfiguration.class, CassandraDataAutoConfiguration.class))
 			.withPropertyValues(
-					"spring.data.cassandra.contact-points:" + cassandra.getHost() + ":"
-							+ cassandra.getFirstMappedPort(),
-					"spring.data.cassandra.local-datacenter=datacenter1", "spring.data.cassandra.request.timeout=20s",
-					"spring.data.cassandra.connection.init-query-timeout=10s",
-					"spring.data.cassandra.request.timeout=10s")
+					"spring.cassandra.contact-points:" + cassandra.getHost() + ":" + cassandra.getFirstMappedPort(),
+					"spring.cassandra.local-datacenter=datacenter1", "spring.cassandra.connection.connect-timeout=60s",
+					"spring.cassandra.connection.init-query-timeout=60s", "spring.cassandra.request.timeout=60s")
 			.withInitializer((context) -> AutoConfigurationPackages.register((BeanDefinitionRegistry) context,
 					City.class.getPackage().getName()));
 
@@ -69,7 +67,7 @@ class CassandraDataAutoConfigurationIntegrationTests {
 	@Test
 	void hasRecreateSchemaActionSet() {
 		this.contextRunner.withUserConfiguration(KeyspaceTestConfiguration.class)
-				.withPropertyValues("spring.data.cassandra.schemaAction=recreate_drop_unused")
+				.withPropertyValues("spring.cassandra.schemaAction=recreate_drop_unused")
 				.run((context) -> assertThat(context.getBean(SessionFactoryFactoryBean.class))
 						.hasFieldOrPropertyWithValue("schemaAction", SchemaAction.RECREATE_DROP_UNUSED));
 	}

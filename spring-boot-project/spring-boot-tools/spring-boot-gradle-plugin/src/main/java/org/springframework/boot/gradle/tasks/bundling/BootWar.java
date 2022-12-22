@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,22 +28,24 @@ import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.file.FileTreeElement;
 import org.gradle.api.internal.file.copy.CopyAction;
-import org.gradle.api.provider.Property;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.bundling.War;
+import org.gradle.work.DisableCachingByDefault;
 
 /**
  * A custom {@link War} task that produces a Spring Boot executable war.
  *
  * @author Andy Wilkinson
  * @author Phillip Webb
+ * @author Scott Frederick
  * @since 2.0.0
  */
-public class BootWar extends War implements BootArchive {
+@DisableCachingByDefault(because = "Not worth caching")
+public abstract class BootWar extends War implements BootArchive {
 
 	private static final String LAUNCHER = "org.springframework.boot.loader.WarLauncher";
 
@@ -55,15 +57,15 @@ public class BootWar extends War implements BootArchive {
 
 	private static final String LAYERS_INDEX = "WEB-INF/layers.idx";
 
+	private static final String CLASSPATH_INDEX = "WEB-INF/classpath.idx";
+
 	private final BootArchiveSupport support;
-
-	private final Property<String> mainClass;
-
-	private FileCollection providedClasspath;
 
 	private final ResolvedDependencies resolvedDependencies = new ResolvedDependencies();
 
-	private LayeredSpec layered = new LayeredSpec();
+	private final LayeredSpec layered;
+
+	private FileCollection providedClasspath;
 
 	/**
 	 * Creates a new {@code BootWar} task.
@@ -71,7 +73,7 @@ public class BootWar extends War implements BootArchive {
 	public BootWar() {
 		this.support = new BootArchiveSupport(LAUNCHER, new LibrarySpec(), new ZipCompressionResolver());
 		Project project = getProject();
-		this.mainClass = project.getObjects().property(String.class);
+		this.layered = project.getObjects().newInstance(LayeredSpec.class);
 		getWebInf().into("lib-provided", fromCallTo(this::getProvidedLibFiles));
 		this.support.moveModuleInfoToRoot(getRootSpec());
 		getRootSpec().eachFile(this.support::excludeNonZipLibraryFiles);
@@ -91,28 +93,24 @@ public class BootWar extends War implements BootArchive {
 
 	@Override
 	public void copy() {
-		this.support.configureManifest(getManifest(), getMainClass().get(), CLASSES_DIRECTORY, LIB_DIRECTORY, null,
-				(isLayeredDisabled()) ? null : LAYERS_INDEX);
+		this.support.configureManifest(getManifest(), getMainClass().get(), CLASSES_DIRECTORY, LIB_DIRECTORY,
+				CLASSPATH_INDEX, (isLayeredDisabled()) ? null : LAYERS_INDEX,
+				this.getTargetJavaVersion().get().getMajorVersion());
 		super.copy();
 	}
 
 	private boolean isLayeredDisabled() {
-		return this.layered != null && !this.layered.isEnabled();
+		return !this.layered.getEnabled().get();
 	}
 
 	@Override
 	protected CopyAction createCopyAction() {
 		if (!isLayeredDisabled()) {
 			LayerResolver layerResolver = new LayerResolver(this.resolvedDependencies, this.layered, this::isLibrary);
-			String layerToolsLocation = this.layered.isIncludeLayerTools() ? LIB_DIRECTORY : null;
-			return this.support.createCopyAction(this, layerResolver, layerToolsLocation);
+			String layerToolsLocation = this.layered.getIncludeLayerTools().get() ? LIB_DIRECTORY : null;
+			return this.support.createCopyAction(this, this.resolvedDependencies, layerResolver, layerToolsLocation);
 		}
-		return this.support.createCopyAction(this);
-	}
-
-	@Override
-	public Property<String> getMainClass() {
-		return this.mainClass;
+		return this.support.createCopyAction(this, this.resolvedDependencies);
 	}
 
 	@Override

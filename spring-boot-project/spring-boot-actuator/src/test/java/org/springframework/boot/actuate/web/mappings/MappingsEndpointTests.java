@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import javax.servlet.FilterRegistration;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRegistration;
-
+import jakarta.servlet.FilterRegistration;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRegistration;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.actuate.web.mappings.MappingsEndpoint.ApplicationMappings;
-import org.springframework.boot.actuate.web.mappings.MappingsEndpoint.ContextMappings;
+import org.springframework.boot.actuate.web.mappings.MappingsEndpoint.ApplicationMappingsDescriptor;
+import org.springframework.boot.actuate.web.mappings.MappingsEndpoint.ContextMappingsDescriptor;
 import org.springframework.boot.actuate.web.mappings.reactive.DispatcherHandlerMappingDescription;
 import org.springframework.boot.actuate.web.mappings.reactive.DispatcherHandlersMappingDescriptionProvider;
 import org.springframework.boot.actuate.web.mappings.servlet.DispatcherServletMappingDescription;
@@ -80,7 +79,7 @@ class MappingsEndpointTests {
 		Supplier<ConfigurableWebApplicationContext> contextSupplier = prepareContextSupplier();
 		new WebApplicationContextRunner(contextSupplier)
 				.withUserConfiguration(EndpointConfiguration.class, ServletWebConfiguration.class).run((context) -> {
-					ContextMappings contextMappings = contextMappings(context);
+					ContextMappingsDescriptor contextMappings = contextMappings(context);
 					assertThat(contextMappings.getParentId()).isNull();
 					assertThat(contextMappings.getMappings()).containsOnlyKeys("dispatcherServlets", "servletFilters",
 							"servlets");
@@ -102,7 +101,7 @@ class MappingsEndpointTests {
 		Supplier<ConfigurableWebApplicationContext> contextSupplier = prepareContextSupplier();
 		new WebApplicationContextRunner(contextSupplier).withUserConfiguration(EndpointConfiguration.class,
 				ServletWebConfiguration.class, PathPatternParserConfiguration.class).run((context) -> {
-					ContextMappings contextMappings = contextMappings(context);
+					ContextMappingsDescriptor contextMappings = contextMappings(context);
 					assertThat(contextMappings.getParentId()).isNull();
 					assertThat(contextMappings.getMappings()).containsOnlyKeys("dispatcherServlets", "servletFilters",
 							"servlets");
@@ -124,7 +123,7 @@ class MappingsEndpointTests {
 		Supplier<ConfigurableWebApplicationContext> contextSupplier = prepareContextSupplier();
 		new WebApplicationContextRunner(contextSupplier).withUserConfiguration(EndpointConfiguration.class,
 				ServletWebConfiguration.class, CustomDispatcherServletConfiguration.class).run((context) -> {
-					ContextMappings contextMappings = contextMappings(context);
+					ContextMappingsDescriptor contextMappings = contextMappings(context);
 					Map<String, List<DispatcherServletMappingDescription>> dispatcherServlets = mappings(
 							contextMappings, "dispatcherServlets");
 					assertThat(dispatcherServlets).containsOnlyKeys("dispatcherServlet",
@@ -157,25 +156,25 @@ class MappingsEndpointTests {
 	void reactiveWebMappings() {
 		new ReactiveWebApplicationContextRunner()
 				.withUserConfiguration(EndpointConfiguration.class, ReactiveWebConfiguration.class).run((context) -> {
-					ContextMappings contextMappings = contextMappings(context);
+					ContextMappingsDescriptor contextMappings = contextMappings(context);
 					assertThat(contextMappings.getParentId()).isNull();
 					assertThat(contextMappings.getMappings()).containsOnlyKeys("dispatcherHandlers");
 					Map<String, List<DispatcherHandlerMappingDescription>> dispatcherHandlers = mappings(
 							contextMappings, "dispatcherHandlers");
 					assertThat(dispatcherHandlers).containsOnlyKeys("webHandler");
 					List<DispatcherHandlerMappingDescription> handlerMappings = dispatcherHandlers.get("webHandler");
-					assertThat(handlerMappings).hasSize(3);
+					assertThat(handlerMappings).hasSize(4);
 				});
 	}
 
-	private ContextMappings contextMappings(ApplicationContext context) {
-		ApplicationMappings applicationMappings = context.getBean(MappingsEndpoint.class).mappings();
+	private ContextMappingsDescriptor contextMappings(ApplicationContext context) {
+		ApplicationMappingsDescriptor applicationMappings = context.getBean(MappingsEndpoint.class).mappings();
 		assertThat(applicationMappings.getContexts()).containsOnlyKeys(context.getId());
 		return applicationMappings.getContexts().get(context.getId());
 	}
 
 	@SuppressWarnings("unchecked")
-	private <T> T mappings(ContextMappings contextMappings, String key) {
+	private <T> T mappings(ContextMappingsDescriptor contextMappings, String key) {
 		return (T) contextMappings.getMappings().get(key);
 	}
 
@@ -209,6 +208,11 @@ class MappingsEndpointTests {
 		@RequestMapping("/three")
 		void three() {
 
+		}
+
+		@Bean
+		RouterFunction<ServerResponse> routerFunctionWithAttributes() {
+			return route(GET("/four"), (request) -> ServerResponse.ok().build()).withAttribute("test", "test");
 		}
 
 	}

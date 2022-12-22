@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.neo4j.driver.AuthToken;
 import org.neo4j.driver.AuthTokens;
@@ -34,6 +32,7 @@ import org.neo4j.driver.GraphDatabase;
 import org.neo4j.driver.internal.Scheme;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -42,7 +41,6 @@ import org.springframework.boot.autoconfigure.neo4j.Neo4jProperties.Security;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyValueException;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
@@ -53,7 +51,7 @@ import org.springframework.util.StringUtils;
  * @author Stephane Nicoll
  * @since 2.4.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration
 @ConditionalOnClass(Driver.class)
 @EnableConfigurationProperties(Neo4jProperties.class)
 public class Neo4jAutoConfiguration {
@@ -65,24 +63,19 @@ public class Neo4jAutoConfiguration {
 	public Driver neo4jDriver(Neo4jProperties properties, Environment environment,
 			ObjectProvider<ConfigBuilderCustomizer> configBuilderCustomizers) {
 		AuthToken authToken = mapAuthToken(properties.getAuthentication(), environment);
-		Config config = mapDriverConfig(properties,
-				configBuilderCustomizers.orderedStream().collect(Collectors.toList()));
+		Config config = mapDriverConfig(properties, configBuilderCustomizers.orderedStream().toList());
 		URI serverUri = determineServerUri(properties, environment);
 		return GraphDatabase.driver(serverUri, authToken, config);
 	}
 
 	URI determineServerUri(Neo4jProperties properties, Environment environment) {
-		return getOrFallback(properties.getUri(), () -> {
-			URI deprecatedProperty = environment.getProperty("spring.data.neo4j.uri", URI.class);
-			return (deprecatedProperty != null) ? deprecatedProperty : DEFAULT_SERVER_URI;
-		});
+		URI uri = properties.getUri();
+		return (uri != null) ? uri : DEFAULT_SERVER_URI;
 	}
 
 	AuthToken mapAuthToken(Neo4jProperties.Authentication authentication, Environment environment) {
-		String username = getOrFallback(authentication.getUsername(),
-				() -> environment.getProperty("spring.data.neo4j.username", String.class));
-		String password = getOrFallback(authentication.getPassword(),
-				() -> environment.getProperty("spring.data.neo4j.password", String.class));
+		String username = authentication.getUsername();
+		String password = authentication.getPassword();
 		String kerberosTicket = authentication.getKerberosTicket();
 		String realm = authentication.getRealm();
 
@@ -101,13 +94,6 @@ public class Neo4jAutoConfiguration {
 			return AuthTokens.kerberos(kerberosTicket);
 		}
 		return AuthTokens.none();
-	}
-
-	private <T> T getOrFallback(T value, Supplier<T> fallback) {
-		if (value != null) {
-			return value;
-		}
-		return fallback.get();
 	}
 
 	Config mapDriverConfig(Neo4jProperties properties, List<ConfigBuilderCustomizer> customizers) {
@@ -188,19 +174,20 @@ public class Neo4jAutoConfiguration {
 	private TrustStrategy createTrustStrategy(Neo4jProperties.Security securityProperties, String propertyName,
 			Security.TrustStrategy strategy) {
 		switch (strategy) {
-		case TRUST_ALL_CERTIFICATES:
-			return TrustStrategy.trustAllCertificates();
-		case TRUST_SYSTEM_CA_SIGNED_CERTIFICATES:
-			return TrustStrategy.trustSystemCertificates();
-		case TRUST_CUSTOM_CA_SIGNED_CERTIFICATES:
-			File certFile = securityProperties.getCertFile();
-			if (certFile == null || !certFile.isFile()) {
+			case TRUST_ALL_CERTIFICATES:
+				return TrustStrategy.trustAllCertificates();
+			case TRUST_SYSTEM_CA_SIGNED_CERTIFICATES:
+				return TrustStrategy.trustSystemCertificates();
+			case TRUST_CUSTOM_CA_SIGNED_CERTIFICATES:
+				File certFile = securityProperties.getCertFile();
+				if (certFile == null || !certFile.isFile()) {
+					throw new InvalidConfigurationPropertyValueException(propertyName, strategy.name(),
+							"Configured trust strategy requires a certificate file.");
+				}
+				return TrustStrategy.trustCustomCertificateSignedBy(certFile);
+			default:
 				throw new InvalidConfigurationPropertyValueException(propertyName, strategy.name(),
-						"Configured trust strategy requires a certificate file.");
-			}
-			return TrustStrategy.trustCustomCertificateSignedBy(certFile);
-		default:
-			throw new InvalidConfigurationPropertyValueException(propertyName, strategy.name(), "Unknown strategy.");
+						"Unknown strategy.");
 		}
 	}
 

@@ -24,7 +24,7 @@ We **highly** recommend that you not specify its version.
 
 [[using.build-systems.maven]]
 === Maven
-To learn about using Spring Boot with Maven, please refer to the documentation for Spring Boot's Maven plugin:
+To learn about using Spring Boot with Maven, see the documentation for Spring Boot's Maven plugin:
 
 * Reference ({spring-boot-maven-plugin-docs}[HTML] and {spring-boot-maven-plugin-pdfdocs}[PDF])
 * {spring-boot-maven-plugin-api}[API]
@@ -33,7 +33,7 @@ To learn about using Spring Boot with Maven, please refer to the documentation f
 
 [[using.build-systems.gradle]]
 === Gradle
-To learn about using Spring Boot with Gradle, please refer to the documentation for Spring Boot's Gradle plugin:
+To learn about using Spring Boot with Gradle, see the documentation for Spring Boot's Gradle plugin:
 
 * Reference ({spring-boot-gradle-plugin-docs}[HTML] and {spring-boot-gradle-plugin-pdfdocs}[PDF])
 * {spring-boot-gradle-plugin-api}[API]
@@ -113,7 +113,7 @@ For example, if you want to get started using Spring and JPA for database access
 
 The starters contain a lot of the dependencies that you need to get a project up and running quickly and with a consistent, supported set of managed transitive dependencies.
 
-.What's in a name
+.What is in a name
 ****
 All **official** starters follow a similar naming pattern; `+spring-boot-starter-*+`, where `+*+` is a particular type of application.
 This naming structure is intended to help when you need to find a starter.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package org.springframework.boot.actuate.autoconfigure.health;
 
 import java.util.Collection;
 
+import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
+import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointsSupplier;
@@ -43,18 +45,22 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = Type.REACTIVE)
-@ConditionalOnBean(HealthEndpoint.class)
+@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class,
+		exposure = { EndpointExposure.WEB, EndpointExposure.CLOUD_FOUNDRY })
 class HealthEndpointReactiveWebExtensionConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
 	@ConditionalOnBean(HealthEndpoint.class)
 	ReactiveHealthEndpointWebExtension reactiveHealthEndpointWebExtension(
-			ReactiveHealthContributorRegistry reactiveHealthContributorRegistry, HealthEndpointGroups groups) {
-		return new ReactiveHealthEndpointWebExtension(reactiveHealthContributorRegistry, groups);
+			ReactiveHealthContributorRegistry reactiveHealthContributorRegistry, HealthEndpointGroups groups,
+			HealthEndpointProperties properties) {
+		return new ReactiveHealthEndpointWebExtension(reactiveHealthContributorRegistry, groups,
+				properties.getLogging().getSlowIndicatorThreshold());
 	}
 
 	@Configuration(proxyBeanMethods = false)
+	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class, exposure = EndpointExposure.WEB)
 	static class WebFluxAdditionalHealthEndpointPathsConfiguration {
 
 		@Bean

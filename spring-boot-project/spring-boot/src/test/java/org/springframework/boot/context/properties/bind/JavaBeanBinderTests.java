@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import org.springframework.boot.context.properties.bind.handler.IgnoreErrorsBind
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.MockConfigurationPropertySource;
+import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.convert.Delimiter;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.convert.ConversionService;
@@ -319,6 +320,18 @@ class JavaBeanBinderTests {
 	}
 
 	@Test
+	void bindToClassWithOverriddenPropertyShouldSetSubclassProperty() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("foo.value-bean.int-value", "123");
+		source.put("foo.value-bean.sub-int-value", "456");
+		this.sources.add(source);
+		ExampleNestedSubclassBean bean = this.binder.bind("foo", Bindable.of(ExampleNestedSubclassBean.class)).get();
+		assertThat(bean.getValueBean()).isNotNull();
+		assertThat(bean.getValueBean().getIntValue()).isEqualTo(123);
+		assertThat(bean.getValueBean().getSubIntValue()).isEqualTo(456);
+	}
+
+	@Test
 	void bindToClassWhenPropertiesMissingShouldReturnUnbound() {
 		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
 		source.put("faf.int-value", "12");
@@ -573,6 +586,18 @@ class JavaBeanBinderTests {
 		assertThat(bean.getNames()).containsExactly("spring", "boot");
 	}
 
+	@Test // gh-33105
+	void bindWhenHasBridgeMethods() {
+		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
+		source.put("test.value", "spring-boot");
+		this.sources.add(source);
+		ApplicationConversionService conversionService = new ApplicationConversionService();
+		conversionService.addConverter(String.class, BridgeType.class, BridgeType::new);
+		Binder binder = new Binder(this.sources, null, conversionService);
+		BridgeMethods bean = binder.bind("test", Bindable.of(BridgeMethods.class)).get();
+		assertThat(bean.getValue()).hasToString("spring-boot");
+	}
+
 	static class ExampleValueBean {
 
 		private int intValue;
@@ -699,7 +724,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleMapBeanWithoutSetter {
 
-		private Map<ExampleEnum, Integer> map = new LinkedHashMap<>();
+		private final Map<ExampleEnum, Integer> map = new LinkedHashMap<>();
 
 		Map<ExampleEnum, Integer> getMap() {
 			return this.map;
@@ -709,7 +734,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleListBeanWithoutSetter {
 
-		private List<ExampleEnum> list = new ArrayList<>();
+		private final List<ExampleEnum> list = new ArrayList<>();
 
 		List<ExampleEnum> getList() {
 			return this.list;
@@ -719,7 +744,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleSetBeanWithoutSetter {
 
-		private Set<ExampleEnum> set = new LinkedHashSet<>();
+		private final Set<ExampleEnum> set = new LinkedHashSet<>();
 
 		Set<ExampleEnum> getSet() {
 			return this.set;
@@ -729,7 +754,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleCollectionBeanWithoutSetter {
 
-		private Collection<ExampleEnum> collection = new ArrayList<>();
+		private final Collection<ExampleEnum> collection = new ArrayList<>();
 
 		Collection<ExampleEnum> getCollection() {
 			return this.collection;
@@ -768,7 +793,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleNestedBeanWithoutSetter {
 
-		private ExampleValueBean valueBean = new ExampleValueBean();
+		private final ExampleValueBean valueBean = new ExampleValueBean();
 
 		ExampleValueBean getValueBean() {
 			return this.valueBean;
@@ -778,7 +803,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleNestedBeanWithoutSetterOrType {
 
-		private ExampleValueBean valueBean = new ExampleValueBean();
+		private final ExampleValueBean valueBean = new ExampleValueBean();
 
 		Object getValueBean() {
 			return this.valueBean;
@@ -788,7 +813,7 @@ class JavaBeanBinderTests {
 
 	static class ExampleImmutableNestedBeanWithoutSetter {
 
-		private NestedImmutable nested = new NestedImmutable();
+		private final NestedImmutable nested = new NestedImmutable();
 
 		NestedImmutable getNested() {
 			return this.nested;
@@ -798,6 +823,35 @@ class JavaBeanBinderTests {
 
 			String getFoo() {
 				return "foo";
+			}
+
+		}
+
+	}
+
+	static class ExampleNestedSubclassBean extends ExampleNestedBean {
+
+		private ExampleValueSubclassBean valueBean;
+
+		@Override
+		ExampleValueSubclassBean getValueBean() {
+			return this.valueBean;
+		}
+
+		void setValueBean(ExampleValueSubclassBean valueBean) {
+			this.valueBean = valueBean;
+		}
+
+		static class ExampleValueSubclassBean extends ExampleValueBean {
+
+			private int subIntValue;
+
+			int getSubIntValue() {
+				return this.subIntValue;
+			}
+
+			void setSubIntValue(int intValue) {
+				this.subIntValue = intValue;
 			}
 
 		}
@@ -1089,7 +1143,7 @@ class JavaBeanBinderTests {
 
 	static class JavaBeanWithGetIs {
 
-		private List<String> names = new ArrayList<>();
+		private final List<String> names = new ArrayList<>();
 
 		boolean isNames() {
 			return !this.names.isEmpty();
@@ -1133,6 +1187,48 @@ class JavaBeanBinderTests {
 
 		void setGamma(int gamma) {
 			this.gamma = gamma + atomic.getAndIncrement();
+		}
+
+	}
+
+	static class BridgeMethodsBase<T extends BridgeBaseType> {
+
+		private T value;
+
+		T getValue() {
+			return this.value;
+		}
+
+		void setValue(T value) {
+			this.value = value;
+		}
+
+	}
+
+	static class BridgeMethods extends BridgeMethodsBase<BridgeType> {
+
+		@Override
+		BridgeType getValue() {
+			return super.getValue();
+		}
+
+	}
+
+	static class BridgeBaseType {
+
+	}
+
+	static class BridgeType extends BridgeBaseType {
+
+		private final String value;
+
+		BridgeType(String value) {
+			this.value = value;
+		}
+
+		@Override
+		public String toString() {
+			return this.value;
 		}
 
 	}

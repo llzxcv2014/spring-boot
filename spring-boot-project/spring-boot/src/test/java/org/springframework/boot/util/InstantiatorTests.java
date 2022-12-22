@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,23 +22,26 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.util.Instantiator.FailureHandler;
 import org.springframework.core.Ordered;
 import org.springframework.core.OverridingClassLoader;
 import org.springframework.core.annotation.Order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
  * Tests for {@link Instantiator}.
  *
  * @author Phillip Webb
+ * @author Scott Frederick
  */
 class InstantiatorTests {
 
-	private ParamA paramA = new ParamA();
+	private final ParamA paramA = new ParamA();
 
-	private ParamB paramB = new ParamB();
+	private final ParamB paramB = new ParamB();
 
 	private ParamC paramC;
 
@@ -108,6 +111,15 @@ class InstantiatorTests {
 				.withMessageContaining("Unable to instantiate");
 	}
 
+	@Test
+	void createWithFailureHandlerInvokesFailureHandler() {
+		assertThatIllegalStateException()
+				.isThrownBy(() -> new Instantiator<>(WithDefaultConstructor.class, (availableParameters) -> {
+				}, new CustomFailureHandler())
+						.instantiate(Collections.singleton(WithAdditionalConstructor.class.getName())))
+				.withMessageContaining("custom failure handler message");
+	}
+
 	private <T> T createInstance(Class<T> type) {
 		return createInstantiator(type).instantiate(Collections.singleton(type.getName())).get(0);
 	}
@@ -154,7 +166,7 @@ class InstantiatorTests {
 
 	static class WithFactory {
 
-		private ParamC paramC;
+		private final ParamC paramC;
 
 		WithFactory(ParamC paramC) {
 			this.paramC = paramC;
@@ -178,6 +190,15 @@ class InstantiatorTests {
 
 		ParamC(Class<?> type) {
 			InstantiatorTests.this.paramC = this;
+		}
+
+	}
+
+	class CustomFailureHandler implements FailureHandler {
+
+		@Override
+		public void handleFailure(Class<?> type, String implementationName, Throwable failure) {
+			throw new IllegalStateException("custom failure handler message");
 		}
 
 	}

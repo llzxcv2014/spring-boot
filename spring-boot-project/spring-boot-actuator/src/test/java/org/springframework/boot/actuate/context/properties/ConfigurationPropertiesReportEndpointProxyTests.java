@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 
 package org.springframework.boot.actuate.context.properties;
 
+import java.util.Collections;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ApplicationConfigurationProperties;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesBeanDescriptor;
+import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesDescriptor;
+import org.springframework.boot.actuate.endpoint.Show;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -57,7 +59,7 @@ class ConfigurationPropertiesReportEndpointProxyTests {
 		ApplicationContextRunner contextRunner = new ApplicationContextRunner().withUserConfiguration(Config.class,
 				SqlExecutor.class);
 		contextRunner.run((context) -> {
-			ApplicationConfigurationProperties applicationProperties = context
+			ConfigurationPropertiesDescriptor applicationProperties = context
 					.getBean(ConfigurationPropertiesReportEndpoint.class).configurationProperties();
 			assertThat(applicationProperties.getContexts().get(context.getId()).getBeans().values().stream()
 					.map(ConfigurationPropertiesBeanDescriptor::getPrefix).filter("executor.sql"::equals).findFirst())
@@ -70,7 +72,7 @@ class ConfigurationPropertiesReportEndpointProxyTests {
 		ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 				.withUserConfiguration(ValidatedConfiguration.class).withPropertyValues("validated.name=baz");
 		contextRunner.run((context) -> {
-			ApplicationConfigurationProperties applicationProperties = context
+			ConfigurationPropertiesDescriptor applicationProperties = context
 					.getBean(ConfigurationPropertiesReportEndpoint.class).configurationProperties();
 			Map<String, Object> properties = applicationProperties.getContexts().get(context.getId()).getBeans()
 					.values().stream().map(ConfigurationPropertiesBeanDescriptor::getProperties).findFirst().get();
@@ -85,7 +87,7 @@ class ConfigurationPropertiesReportEndpointProxyTests {
 
 		@Bean
 		ConfigurationPropertiesReportEndpoint endpoint() {
-			return new ConfigurationPropertiesReportEndpoint();
+			return new ConfigurationPropertiesReportEndpoint(Collections.emptyList(), Show.ALWAYS);
 		}
 
 		@Bean

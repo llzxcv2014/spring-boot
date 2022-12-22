@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import io.micrometer.core.instrument.Tag;
 
 import org.springframework.boot.actuate.metrics.http.Outcome;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.ServerWebExchange;
@@ -40,7 +40,10 @@ import org.springframework.web.util.pattern.PathPattern;
  * @author Michael McFadyen
  * @author Brian Clozel
  * @since 2.0.0
+ * @deprecated since 3.0.0 for removal in 3.2.0 in favor of
+ * {@link org.springframework.http.server.reactive.observation.ServerRequestObservationConvention}
  */
+@Deprecated(since = "3.0.0", forRemoval = true)
 public final class WebFluxTags {
 
 	private static final Tag URI_NOT_FOUND = Tag.of("uri", "NOT_FOUND");
@@ -70,7 +73,7 @@ public final class WebFluxTags {
 	 * @return the method tag whose value is a capitalized method (e.g. GET).
 	 */
 	public static Tag method(ServerWebExchange exchange) {
-		return Tag.of("method", exchange.getRequest().getMethodValue());
+		return Tag.of("method", exchange.getRequest().getMethod().name());
 	}
 
 	/**
@@ -80,7 +83,7 @@ public final class WebFluxTags {
 	 * @return the status tag derived from the response status
 	 */
 	public static Tag status(ServerWebExchange exchange) {
-		HttpStatus status = exchange.getResponse().getStatusCode();
+		HttpStatusCode status = exchange.getResponse().getStatusCode();
 		if (status == null) {
 			status = HttpStatus.OK;
 		}
@@ -122,7 +125,7 @@ public final class WebFluxTags {
 			}
 			return Tag.of("uri", patternString);
 		}
-		HttpStatus status = exchange.getResponse().getStatusCode();
+		HttpStatusCode status = exchange.getResponse().getStatusCode();
 		if (status != null) {
 			if (status.is3xxRedirection()) {
 				return URI_REDIRECTION;
@@ -168,20 +171,6 @@ public final class WebFluxTags {
 
 	/**
 	 * Creates an {@code outcome} tag based on the response status of the given
-	 * {@code exchange}.
-	 * @param exchange the exchange
-	 * @return the outcome tag derived from the response status
-	 * @since 2.1.0
-	 * @deprecated since 2.5.0 for removal in 2.7.0 in favor of
-	 * {@link #outcome(ServerWebExchange, Throwable)}
-	 */
-	@Deprecated
-	public static Tag outcome(ServerWebExchange exchange) {
-		return outcome(exchange, null);
-	}
-
-	/**
-	 * Creates an {@code outcome} tag based on the response status of the given
 	 * {@code exchange} and the exception thrown during request processing.
 	 * @param exchange the exchange
 	 * @param exception the termination signal sent by the publisher
@@ -190,24 +179,13 @@ public final class WebFluxTags {
 	 */
 	public static Tag outcome(ServerWebExchange exchange, Throwable exception) {
 		if (exception != null) {
-			if (exception instanceof CancelledServerWebExchangeException
-					|| DISCONNECTED_CLIENT_EXCEPTIONS.contains(exception.getClass().getSimpleName())) {
+			if (DISCONNECTED_CLIENT_EXCEPTIONS.contains(exception.getClass().getSimpleName())) {
 				return Outcome.UNKNOWN.asTag();
 			}
 		}
-		Integer statusCode = extractStatusCode(exchange);
-		Outcome outcome = (statusCode != null) ? Outcome.forStatus(statusCode) : Outcome.SUCCESS;
+		HttpStatusCode statusCode = exchange.getResponse().getStatusCode();
+		Outcome outcome = (statusCode != null) ? Outcome.forStatus(statusCode.value()) : Outcome.SUCCESS;
 		return outcome.asTag();
-	}
-
-	private static Integer extractStatusCode(ServerWebExchange exchange) {
-		ServerHttpResponse response = exchange.getResponse();
-		Integer statusCode = response.getRawStatusCode();
-		if (statusCode != null) {
-			return statusCode;
-		}
-		HttpStatus status = response.getStatusCode();
-		return (status != null) ? status.value() : null;
 	}
 
 }

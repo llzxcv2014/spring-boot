@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,9 +82,9 @@ public class JettyWebServerFactoryCustomizer
 		PropertyMapper propertyMapper = PropertyMapper.get();
 		propertyMapper.from(threadProperties::getAcceptors).whenNonNull().to(factory::setAcceptors);
 		propertyMapper.from(threadProperties::getSelectors).whenNonNull().to(factory::setSelectors);
-		propertyMapper.from(properties::getMaxHttpHeaderSize).whenNonNull().asInt(DataSize::toBytes)
-				.when(this::isPositive).to((maxHttpHeaderSize) -> factory
-						.addServerCustomizers(new MaxHttpHeaderSizeCustomizer(maxHttpHeaderSize)));
+		propertyMapper.from(properties::getMaxHttpRequestHeaderSize).whenNonNull().asInt(DataSize::toBytes)
+				.when(this::isPositive).to((maxHttpRequestHeaderSize) -> factory
+						.addServerCustomizers(new MaxHttpRequestHeaderSizeCustomizer(maxHttpRequestHeaderSize)));
 		propertyMapper.from(jettyProperties::getMaxHttpFormPostSize).asInt(DataSize::toBytes).when(this::isPositive)
 				.to((maxHttpFormPostSize) -> customizeMaxHttpFormPostSize(factory, maxHttpFormPostSize));
 		propertyMapper.from(jettyProperties::getConnectionIdleTimeout).whenNonNull()
@@ -108,8 +108,8 @@ public class JettyWebServerFactoryCustomizer
 	private void customizeIdleTimeout(ConfigurableJettyWebServerFactory factory, Duration connectionTimeout) {
 		factory.addServerCustomizers((server) -> {
 			for (org.eclipse.jetty.server.Connector connector : server.getConnectors()) {
-				if (connector instanceof AbstractConnector) {
-					((AbstractConnector) connector).setIdleTimeout(connectionTimeout.toMillis());
+				if (connector instanceof AbstractConnector abstractConnector) {
+					abstractConnector.setIdleTimeout(connectionTimeout.toMillis());
 				}
 			}
 		});
@@ -125,14 +125,14 @@ public class JettyWebServerFactoryCustomizer
 
 			private void setHandlerMaxHttpFormPostSize(Handler... handlers) {
 				for (Handler handler : handlers) {
-					if (handler instanceof ContextHandler) {
-						((ContextHandler) handler).setMaxFormContentSize(maxHttpFormPostSize);
+					if (handler instanceof ContextHandler contextHandler) {
+						contextHandler.setMaxFormContentSize(maxHttpFormPostSize);
 					}
-					else if (handler instanceof HandlerWrapper) {
-						setHandlerMaxHttpFormPostSize(((HandlerWrapper) handler).getHandler());
+					else if (handler instanceof HandlerWrapper wrapper) {
+						setHandlerMaxHttpFormPostSize(wrapper.getHandler());
 					}
-					else if (handler instanceof HandlerCollection) {
-						setHandlerMaxHttpFormPostSize(((HandlerCollection) handler).getHandlers());
+					else if (handler instanceof HandlerCollection collection) {
+						setHandlerMaxHttpFormPostSize(collection.getHandlers());
 					}
 				}
 			}
@@ -192,12 +192,12 @@ public class JettyWebServerFactoryCustomizer
 		return CustomRequestLog.NCSA_FORMAT;
 	}
 
-	private static class MaxHttpHeaderSizeCustomizer implements JettyServerCustomizer {
+	private static class MaxHttpRequestHeaderSizeCustomizer implements JettyServerCustomizer {
 
-		private final int maxHttpHeaderSize;
+		private final int maxRequestHeaderSize;
 
-		MaxHttpHeaderSizeCustomizer(int maxHttpHeaderSize) {
-			this.maxHttpHeaderSize = maxHttpHeaderSize;
+		MaxHttpRequestHeaderSizeCustomizer(int maxRequestHeaderSize) {
+			this.maxRequestHeaderSize = maxRequestHeaderSize;
 		}
 
 		@Override
@@ -212,7 +212,7 @@ public class JettyWebServerFactoryCustomizer
 		private void customize(ConnectionFactory factory) {
 			if (factory instanceof HttpConfiguration.ConnectionFactory) {
 				((HttpConfiguration.ConnectionFactory) factory).getHttpConfiguration()
-						.setRequestHeaderSize(this.maxHttpHeaderSize);
+						.setRequestHeaderSize(this.maxRequestHeaderSize);
 			}
 		}
 

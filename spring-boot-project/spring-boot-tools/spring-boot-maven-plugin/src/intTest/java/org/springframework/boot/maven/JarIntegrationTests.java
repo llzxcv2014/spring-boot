@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.jar.JarFile;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +62,7 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 			}).hasEntryWithNameStartingWith("BOOT-INF/lib/spring-context")
 					.hasEntryWithNameStartingWith("BOOT-INF/lib/spring-core")
 					.hasEntryWithNameStartingWith("BOOT-INF/lib/spring-jcl")
-					.hasEntryWithNameStartingWith("BOOT-INF/lib/jakarta.servlet-api-4")
+					.hasEntryWithNameStartingWith("BOOT-INF/lib/jakarta.servlet-api-6")
 					.hasEntryWithName("BOOT-INF/classes/org/test/SampleApplication.class")
 					.hasEntryWithName("org/springframework/boot/loader/JarLauncher.class");
 			assertThat(buildLog(project)).contains("Replacing main artifact with repackaged archive")
@@ -366,6 +365,20 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 	}
 
 	@TestTemplate
+	void repackagedJarContainsClasspathIndex(MavenBuild mavenBuild) {
+		mavenBuild.project("jar").execute((project) -> {
+			File repackaged = new File(project, "target/jar-0.0.1.BUILD-SNAPSHOT.jar");
+			assertThat(jar(repackaged)).manifest(
+					(manifest) -> manifest.hasAttribute("Spring-Boot-Classpath-Index", "BOOT-INF/classpath.idx"));
+			assertThat(jar(repackaged)).hasEntryWithName("BOOT-INF/classpath.idx");
+			try (JarFile jarFile = new JarFile(repackaged)) {
+				List<String> index = readClasspathIndex(jarFile, "BOOT-INF/classpath.idx");
+				assertThat(index).allMatch((entry) -> entry.startsWith("BOOT-INF/lib/"));
+			}
+		});
+	}
+
+	@TestTemplate
 	void whenJarIsRepackagedWithOutputTimestampConfiguredThenJarIsReproducible(MavenBuild mavenBuild)
 			throws InterruptedException {
 		String firstHash = buildJarWithOutputTimestamp(mavenBuild);
@@ -383,8 +396,7 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 			try (JarFile jar = new JarFile(repackaged)) {
 				List<String> unreproducibleEntries = jar.stream()
 						.filter((entry) -> entry.getLastModifiedTime().toMillis() != 1584352800000L)
-						.map((entry) -> entry.getName() + ": " + entry.getLastModifiedTime())
-						.collect(Collectors.toList());
+						.map((entry) -> entry.getName() + ": " + entry.getLastModifiedTime()).toList();
 				assertThat(unreproducibleEntries).isEmpty();
 				jarHash.set(FileUtils.sha1Hash(repackaged));
 				FileSystemUtils.deleteRecursively(project);
@@ -397,8 +409,7 @@ class JarIntegrationTests extends AbstractArchiveIntegrationTests {
 	}
 
 	@TestTemplate
-	void whenJarIsRepackagedWithOutputTimestampConfiguredThenLibrariesAreSorted(MavenBuild mavenBuild)
-			throws InterruptedException {
+	void whenJarIsRepackagedWithOutputTimestampConfiguredThenLibrariesAreSorted(MavenBuild mavenBuild) {
 		mavenBuild.project("jar-output-timestamp").execute((project) -> {
 			File repackaged = new File(project, "target/jar-output-timestamp-0.0.1.BUILD-SNAPSHOT.jar");
 			List<String> sortedLibs = Arrays.asList("BOOT-INF/lib/jakarta.servlet-api", "BOOT-INF/lib/spring-aop",

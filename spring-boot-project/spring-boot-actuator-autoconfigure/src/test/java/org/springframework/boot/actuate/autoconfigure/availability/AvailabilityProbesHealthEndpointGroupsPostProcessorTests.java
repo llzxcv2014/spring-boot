@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.mock;
  */
 class AvailabilityProbesHealthEndpointGroupsPostProcessorTests {
 
-	private AvailabilityProbesHealthEndpointGroupsPostProcessor postProcessor = new AvailabilityProbesHealthEndpointGroupsPostProcessor(
+	private final AvailabilityProbesHealthEndpointGroupsPostProcessor postProcessor = new AvailabilityProbesHealthEndpointGroupsPostProcessor(
 			new MockEnvironment());
 
 	@Test
@@ -48,7 +48,8 @@ class AvailabilityProbesHealthEndpointGroupsPostProcessorTests {
 		names.add("readiness");
 		names.add("liveness");
 		given(groups.getNames()).willReturn(names);
-		assertThat(this.postProcessor.postProcessHealthEndpointGroups(groups)).isSameAs(groups);
+		assertThat(this.postProcessor.postProcessHealthEndpointGroups(groups))
+				.isInstanceOf(AvailabilityProbesHealthEndpointGroups.class);
 	}
 
 	@Test
@@ -77,6 +78,25 @@ class AvailabilityProbesHealthEndpointGroupsPostProcessorTests {
 	@Test
 	void postProcessHealthEndpointGroupsWhenAdditionalPathPropertyIsTrue() {
 		HealthEndpointGroups postProcessed = getPostProcessed("true");
+		HealthEndpointGroup liveness = postProcessed.get("liveness");
+		HealthEndpointGroup readiness = postProcessed.get("readiness");
+		assertThat(liveness.getAdditionalPath().toString()).isEqualTo("server:/livez");
+		assertThat(readiness.getAdditionalPath().toString()).isEqualTo("server:/readyz");
+	}
+
+	@Test
+	void postProcessHealthEndpointGroupsWhenGroupsAlreadyContainedAndAdditionalPathPropertyIsTrue() {
+		HealthEndpointGroups groups = mock(HealthEndpointGroups.class);
+		Set<String> names = new LinkedHashSet<>();
+		names.add("test");
+		names.add("readiness");
+		names.add("liveness");
+		given(groups.getNames()).willReturn(names);
+		MockEnvironment environment = new MockEnvironment();
+		environment.setProperty("management.endpoint.health.probes.add-additional-paths", "true");
+		AvailabilityProbesHealthEndpointGroupsPostProcessor postProcessor = new AvailabilityProbesHealthEndpointGroupsPostProcessor(
+				environment);
+		HealthEndpointGroups postProcessed = postProcessor.postProcessHealthEndpointGroups(groups);
 		HealthEndpointGroup liveness = postProcessed.get("liveness");
 		HealthEndpointGroup readiness = postProcessed.get("readiness");
 		assertThat(liveness.getAdditionalPath().toString()).isEqualTo("server:/livez");

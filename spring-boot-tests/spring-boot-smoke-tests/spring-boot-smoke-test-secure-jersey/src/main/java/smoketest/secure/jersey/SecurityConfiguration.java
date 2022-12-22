@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,15 +40,14 @@ public class SecurityConfiguration {
 
 	@Bean
 	SecurityFilterChain configure(HttpSecurity http) throws Exception {
-		// @formatter:off
-		http.authorizeRequests()
-				.requestMatchers(EndpointRequest.to("health")).permitAll()
-				.requestMatchers(EndpointRequest.toAnyEndpoint().excluding(MappingsEndpoint.class)).hasRole("ACTUATOR")
-				.antMatchers("/**").hasRole("USER")
-				.and()
-			.httpBasic();
+		http.authorizeHttpRequests((requests) -> {
+			requests.requestMatchers(EndpointRequest.to("health")).permitAll();
+			requests.requestMatchers(EndpointRequest.toAnyEndpoint().excluding(MappingsEndpoint.class))
+					.hasRole("ACTUATOR");
+			requests.requestMatchers("/**").hasRole("USER");
+		});
+		http.httpBasic();
 		return http.build();
-		// @formatter:on
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener;
 import org.springframework.boot.test.context.assertj.ApplicationContextAssertProvider;
 import org.springframework.boot.test.context.runner.AbstractApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ContextConsumer;
@@ -75,8 +74,40 @@ abstract class AbstractHealthEndpointAdditionalPathIntegrationTests<T extends Ab
 		this.runner.withPropertyValues("management.endpoint.health.group.live.include=diskSpace",
 				"management.server.port=0", "management.endpoint.health.group.live.additional-path=server:healthz",
 				"management.endpoint.health.group.live.show-components=always")
-				.withInitializer(new ConditionEvaluationReportLoggingListener())
 				.run(withWebTestClient(this::testResponse, "local.server.port"));
+	}
+
+	@Test
+	void groupsAreNotConfiguredWhenHealthEndpointIsNotExposed() {
+		this.runner
+				.withPropertyValues("spring.jmx.enabled=true", "management.endpoints.web.exposure.exclude=health",
+						"management.server.port=0", "management.endpoint.health.group.live.include=diskSpace",
+						"management.endpoint.health.group.live.additional-path=server:healthz",
+						"management.endpoint.health.group.live.show-components=always")
+				.run(withWebTestClient((client) -> client.get().uri("/healthz").accept(MediaType.APPLICATION_JSON)
+						.exchange().expectStatus().isNotFound(), "local.server.port"));
+	}
+
+	@Test
+	void groupsAreNotConfiguredWhenHealthEndpointIsNotExposedAndCloudFoundryPlatform() {
+		this.runner.withPropertyValues("spring.jmx.enabled=true", "management.endpoints.web.exposure.exclude=health",
+				"spring.main.cloud-platform=cloud_foundry", "management.endpoint.health.group.live.include=diskSpace",
+				"management.endpoint.health.group.live.additional-path=server:healthz",
+				"management.endpoint.health.group.live.show-components=always")
+				.run(withWebTestClient((client) -> client.get().uri("/healthz").accept(MediaType.APPLICATION_JSON)
+						.exchange().expectStatus().isNotFound(), "local.server.port"));
+	}
+
+	@Test
+	void groupsAreNotConfiguredWhenHealthEndpointIsNotExposedWithDifferentManagementPortAndCloudFoundryPlatform() {
+		this.runner
+				.withPropertyValues("spring.jmx.enabled=true", "management.endpoints.web.exposure.exclude=health",
+						"spring.main.cloud-platform=cloud_foundry", "management.server.port=0",
+						"management.endpoint.health.group.live.include=diskSpace",
+						"management.endpoint.health.group.live.additional-path=server:healthz",
+						"management.endpoint.health.group.live.show-components=always")
+				.run(withWebTestClient((client) -> client.get().uri("/healthz").accept(MediaType.APPLICATION_JSON)
+						.exchange().expectStatus().isNotFound(), "local.server.port"));
 	}
 
 	private void testResponse(WebTestClient client) {

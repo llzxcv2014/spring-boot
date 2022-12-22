@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -34,6 +36,7 @@ import org.springframework.boot.context.properties.bind.Binder.Context;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.ConfigurationPropertyState;
+import org.springframework.core.BridgeMethodResolver;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
 
@@ -129,11 +132,20 @@ class JavaBeanBinder implements DataObjectBinder {
 
 		private void addProperties(Class<?> type) {
 			while (type != null && !Object.class.equals(type)) {
-				Method[] declaredMethods = getSorted(type, Class::getDeclaredMethods, Method::getName);
+				Method[] declaredMethods = getSorted(type, this::getDeclaredMethods, Method::getName);
 				Field[] declaredFields = getSorted(type, Class::getDeclaredFields, Field::getName);
 				addProperties(declaredMethods, declaredFields);
 				type = type.getSuperclass();
 			}
+		}
+
+		private Method[] getDeclaredMethods(Class<?> type) {
+			Method[] methods = type.getDeclaredMethods();
+			Set<Method> result = new LinkedHashSet<>(methods.length);
+			for (Method method : methods) {
+				result.add(BridgeMethodResolver.findBridgedMethod(method));
+			}
+			return result.toArray(new Method[0]);
 		}
 
 		private <S, E> E[] getSorted(S source, Function<S, E[]> elements, Function<E, String> name) {
@@ -165,7 +177,8 @@ class JavaBeanBinder implements DataObjectBinder {
 		private boolean isCandidate(Method method) {
 			int modifiers = method.getModifiers();
 			return !Modifier.isPrivate(modifiers) && !Modifier.isProtected(modifiers) && !Modifier.isAbstract(modifiers)
-					&& !Modifier.isStatic(modifiers) && !Object.class.equals(method.getDeclaringClass())
+					&& !Modifier.isStatic(modifiers) && !method.isBridge()
+					&& !Object.class.equals(method.getDeclaringClass())
 					&& !Class.class.equals(method.getDeclaringClass()) && method.getName().indexOf('$') == -1;
 		}
 

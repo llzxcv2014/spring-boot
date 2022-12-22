@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,6 @@ import java.security.KeyStore;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 
-import com.couchbase.client.core.env.IoConfig;
-import com.couchbase.client.core.env.SecurityConfig;
-import com.couchbase.client.core.env.TimeoutConfig;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.ClusterOptions;
 import com.couchbase.client.java.codec.JacksonJsonSerializer;
@@ -35,7 +32,7 @@ import com.couchbase.client.java.json.JsonValueModule;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -57,8 +54,7 @@ import org.springframework.util.ResourceUtils;
  * @author Yulin Qin
  * @since 1.4.0
  */
-@Configuration(proxyBeanMethods = false)
-@AutoConfigureAfter(JacksonAutoConfiguration.class)
+@AutoConfiguration(after = JacksonAutoConfiguration.class)
 @ConditionalOnClass(Cluster.class)
 @ConditionalOnProperty("spring.couchbase.connection-string")
 @EnableConfigurationProperties(CouchbaseProperties.class)
@@ -84,16 +80,16 @@ public class CouchbaseAutoConfiguration {
 	private ClusterEnvironment.Builder initializeEnvironmentBuilder(CouchbaseProperties properties) {
 		ClusterEnvironment.Builder builder = ClusterEnvironment.builder();
 		Timeouts timeouts = properties.getEnv().getTimeouts();
-		builder.timeoutConfig(TimeoutConfig.kvTimeout(timeouts.getKeyValue()).analyticsTimeout(timeouts.getAnalytics())
-				.kvDurableTimeout(timeouts.getKeyValueDurable()).queryTimeout(timeouts.getQuery())
-				.viewTimeout(timeouts.getView()).searchTimeout(timeouts.getSearch())
+		builder.timeoutConfig((config) -> config.kvTimeout(timeouts.getKeyValue())
+				.analyticsTimeout(timeouts.getAnalytics()).kvDurableTimeout(timeouts.getKeyValueDurable())
+				.queryTimeout(timeouts.getQuery()).viewTimeout(timeouts.getView()).searchTimeout(timeouts.getSearch())
 				.managementTimeout(timeouts.getManagement()).connectTimeout(timeouts.getConnect())
 				.disconnectTimeout(timeouts.getDisconnect()));
 		CouchbaseProperties.Io io = properties.getEnv().getIo();
-		builder.ioConfig(IoConfig.maxHttpConnections(io.getMaxEndpoints()).numKvConnections(io.getMinEndpoints())
-				.idleHttpConnectionTimeout(io.getIdleHttpConnectionTimeout()));
+		builder.ioConfig((config) -> config.maxHttpConnections(io.getMaxEndpoints())
+				.numKvConnections(io.getMinEndpoints()).idleHttpConnectionTimeout(io.getIdleHttpConnectionTimeout()));
 		if (properties.getEnv().getSsl().getEnabled()) {
-			builder.securityConfig(SecurityConfig.enableTls(true)
+			builder.securityConfig((config) -> config.enableTls(true)
 					.trustManagerFactory(getTrustManagerFactory(properties.getEnv().getSsl())));
 		}
 		return builder;

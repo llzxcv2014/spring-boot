@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,11 @@ import java.util.Map;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.servlet.DispatcherType;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
-import javax.servlet.ServletException;
-
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletContextEvent;
+import jakarta.servlet.ServletContextListener;
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,8 +56,8 @@ import org.springframework.web.context.support.StandardServletEnvironment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link SpringBootServletInitializer}.
@@ -69,7 +68,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(OutputCaptureExtension.class)
 class SpringBootServletInitializerTests {
 
-	private ServletContext servletContext = new MockServletContext();
+	private final ServletContext servletContext = new MockServletContext();
 
 	private SpringApplication application;
 
@@ -220,7 +219,7 @@ class SpringBootServletInitializerTests {
 
 		}.onStartup(servletContext);
 		ArgumentCaptor<ServletContextListener> captor = ArgumentCaptor.forClass(ServletContextListener.class);
-		verify(servletContext).addListener(captor.capture());
+		then(servletContext).should().addListener(captor.capture());
 		captor.getValue().contextDestroyed(new ServletContextEvent(servletContext));
 		assertThat(driversDeregistered).isTrue();
 	}

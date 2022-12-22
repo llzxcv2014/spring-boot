@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,9 @@ import org.apache.catalina.valves.ErrorReportValve;
 import org.apache.catalina.valves.RemoteIpValve;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.ProtocolHandler;
+import org.apache.coyote.UpgradeProtocol;
 import org.apache.coyote.http11.AbstractHttp11Protocol;
+import org.apache.coyote.http2.Http2Protocol;
 
 import org.springframework.boot.autoconfigure.web.ErrorProperties;
 import org.springframework.boot.autoconfigure.web.ErrorProperties.IncludeAttribute;
@@ -90,9 +92,9 @@ public class TomcatWebServerFactoryCustomizer
 				.to((maxThreads) -> customizeMaxThreads(factory, threadProperties.getMax()));
 		propertyMapper.from(threadProperties::getMinSpare).when(this::isPositive)
 				.to((minSpareThreads) -> customizeMinThreads(factory, minSpareThreads));
-		propertyMapper.from(this.serverProperties.getMaxHttpHeaderSize()).whenNonNull().asInt(DataSize::toBytes)
+		propertyMapper.from(this.serverProperties.getMaxHttpRequestHeaderSize()).whenNonNull().asInt(DataSize::toBytes)
 				.when(this::isPositive)
-				.to((maxHttpHeaderSize) -> customizeMaxHttpHeaderSize(factory, maxHttpHeaderSize));
+				.to((maxHttpRequestHeaderSize) -> customizeMaxHttpRequestHeaderSize(factory, maxHttpRequestHeaderSize));
 		propertyMapper.from(tomcatProperties::getMaxSwallowSize).whenNonNull().asInt(DataSize::toBytes)
 				.to((maxSwallowSize) -> customizeMaxSwallowSize(factory, maxSwallowSize));
 		propertyMapper.from(tomcatProperties::getMaxHttpFormPostSize).asInt(DataSize::toBytes)
@@ -149,6 +151,11 @@ public class TomcatWebServerFactoryCustomizer
 	private void customizeKeepAliveTimeout(ConfigurableTomcatWebServerFactory factory, Duration keepAliveTimeout) {
 		factory.addConnectorCustomizers((connector) -> {
 			ProtocolHandler handler = connector.getProtocolHandler();
+			for (UpgradeProtocol upgradeProtocol : handler.findUpgradeProtocols()) {
+				if (upgradeProtocol instanceof Http2Protocol protocol) {
+					protocol.setKeepAliveTimeout(keepAliveTimeout.toMillis());
+				}
+			}
 			if (handler instanceof AbstractProtocol) {
 				AbstractProtocol<?> protocol = (AbstractProtocol<?>) handler;
 				protocol.setKeepAliveTimeout((int) keepAliveTimeout.toMillis());
@@ -220,6 +227,7 @@ public class TomcatWebServerFactoryCustomizer
 			if (StringUtils.hasLength(remoteIpHeader)) {
 				valve.setRemoteIpHeader(remoteIpHeader);
 			}
+			valve.setTrustedProxies(remoteIpProperties.getTrustedProxies());
 			// The internal proxies default to a list of "safe" internal IP addresses
 			valve.setInternalProxies(remoteIpProperties.getInternalProxies());
 			try {
@@ -267,12 +275,13 @@ public class TomcatWebServerFactoryCustomizer
 	}
 
 	@SuppressWarnings("rawtypes")
-	private void customizeMaxHttpHeaderSize(ConfigurableTomcatWebServerFactory factory, int maxHttpHeaderSize) {
+	private void customizeMaxHttpRequestHeaderSize(ConfigurableTomcatWebServerFactory factory,
+			int maxHttpRequestHeaderSize) {
 		factory.addConnectorCustomizers((connector) -> {
 			ProtocolHandler handler = connector.getProtocolHandler();
 			if (handler instanceof AbstractHttp11Protocol) {
 				AbstractHttp11Protocol protocol = (AbstractHttp11Protocol) handler;
-				protocol.setMaxHttpHeaderSize(maxHttpHeaderSize);
+				protocol.setMaxHttpRequestHeaderSize(maxHttpRequestHeaderSize);
 			}
 		});
 	}

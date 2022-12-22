@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,8 +60,8 @@ class DataRedisTestIntegrationTests {
 
 	@DynamicPropertySource
 	static void redisProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.redis.host", redis::getHost);
-		registry.add("spring.redis.port", redis::getFirstMappedPort);
+		registry.add("spring.data.redis.host", redis::getHost);
+		registry.add("spring.data.redis.port", redis::getFirstMappedPort);
 	}
 
 	@Test
@@ -71,7 +71,7 @@ class DataRedisTestIntegrationTests {
 		assertThat(personHash.getId()).isNull();
 		PersonHash savedEntity = this.exampleRepository.save(personHash);
 		assertThat(savedEntity.getId()).isNotNull();
-		assertThat(this.operations.execute((RedisConnection connection) -> connection
+		assertThat(this.operations.execute((RedisConnection connection) -> connection.keyCommands()
 				.exists(("persons:" + savedEntity.getId()).getBytes(CHARSET)))).isTrue();
 		this.exampleRepository.deleteAll();
 	}

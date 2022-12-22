@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.boot.context.properties.source;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
@@ -581,8 +580,8 @@ class ConfigurationPropertyNameTests {
 		names.add(ConfigurationPropertyName.of("foo.baz"));
 		names.add(ConfigurationPropertyName.of("foo"));
 		Collections.sort(names);
-		assertThat(names.stream().map(ConfigurationPropertyName::toString).collect(Collectors.toList()))
-				.containsExactly("foo", "foo[2]", "foo[10]", "foo.bar", "foo.bard", "foo.baz");
+		assertThat(names.stream().map(ConfigurationPropertyName::toString).toList()).containsExactly("foo", "foo[2]",
+				"foo[10]", "foo.bar", "foo.bard", "foo.baz");
 	}
 
 	@Test
@@ -686,6 +685,15 @@ class ConfigurationPropertyNameTests {
 	}
 
 	@Test
+	void equalsWhenAdaptedNameMatchesDueToRemovalOfTrailingCharacters() {
+		// gh-30317
+		ConfigurationPropertyName name1 = ConfigurationPropertyName.of("example.demo");
+		ConfigurationPropertyName name2 = ConfigurationPropertyName.adapt("example.demo$$", '.');
+		assertThat(name1).isEqualTo(name2);
+		assertThat(name2).isEqualTo(name1);
+	}
+
+	@Test
 	void isValidWhenValidShouldReturnTrue() {
 		assertThat(ConfigurationPropertyName.isValid("")).isTrue();
 		assertThat(ConfigurationPropertyName.isValid("foo")).isTrue();
@@ -709,17 +717,17 @@ class ConfigurationPropertyNameTests {
 	void hashCodeIsStored() {
 		ConfigurationPropertyName name = ConfigurationPropertyName.of("hash.code");
 		int hashCode = name.hashCode();
-		// hasFieldOrPropertyWithValue would lookup for `hashCode()`.
+		// hasFieldOrPropertyWithValue would look up for hashCode()
 		assertThat(ReflectionTestUtils.getField(name, "hashCode")).isEqualTo(hashCode);
 	}
 
 	@Test
-	void hasIndexedElementWhenHasIndexedElementReturnsTrue() throws Exception {
+	void hasIndexedElementWhenHasIndexedElementReturnsTrue() {
 		assertThat(ConfigurationPropertyName.of("foo[bar]").hasIndexedElement()).isTrue();
 	}
 
 	@Test
-	void hasIndexedElementWhenHasNoIndexedElementReturnsFalse() throws Exception {
+	void hasIndexedElementWhenHasNoIndexedElementReturnsFalse() {
 		assertThat(ConfigurationPropertyName.of("foo.bar").hasIndexedElement()).isFalse();
 	}
 

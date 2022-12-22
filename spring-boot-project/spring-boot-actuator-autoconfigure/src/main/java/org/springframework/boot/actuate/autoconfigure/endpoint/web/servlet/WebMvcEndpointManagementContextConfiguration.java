@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,25 @@
 package org.springframework.boot.actuate.autoconfigure.endpoint.web.servlet;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
+import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.CorsEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnManagementPort;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
 import org.springframework.boot.actuate.endpoint.ExposableEndpoint;
+import org.springframework.boot.actuate.endpoint.OperationResponseBody;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.jackson.EndpointObjectMapper;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.EndpointMediaTypes;
@@ -45,12 +54,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Role;
 import org.springframework.core.env.Environment;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.DispatcherServlet;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * {@link ManagementContextConfiguration @ManagementContextConfiguration} for Spring MVC
@@ -83,7 +96,7 @@ public class WebMvcEndpointManagementContextConfiguration {
 		boolean shouldRegisterLinksMapping = shouldRegisterLinksMapping(webEndpointProperties, environment, basePath);
 		return new WebMvcEndpointHandlerMapping(endpointMapping, webEndpoints, endpointMediaTypes,
 				corsProperties.toCorsConfiguration(), new EndpointLinksResolver(allEndpoints, basePath),
-				shouldRegisterLinksMapping, WebMvcAutoConfiguration.pathPatternParser);
+				shouldRegisterLinksMapping);
 	}
 
 	private boolean shouldRegisterLinksMapping(WebEndpointProperties webEndpointProperties, Environment environment,
@@ -95,6 +108,7 @@ public class WebMvcEndpointManagementContextConfiguration {
 	@Bean
 	@ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
 	@ConditionalOnBean(HealthEndpoint.class)
+	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class, exposure = EndpointExposure.WEB)
 	public AdditionalHealthEndpointPathsWebMvcHandlerMapping managementHealthEndpointWebMvcHandlerMapping(
 			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups groups) {
 		Collection<ExposableWebEndpoint> webEndpoints = webEndpointsSupplier.getEndpoints();
@@ -112,6 +126,48 @@ public class WebMvcEndpointManagementContextConfiguration {
 		EndpointMapping endpointMapping = new EndpointMapping(webEndpointProperties.getBasePath());
 		return new ControllerEndpointHandlerMapping(endpointMapping, controllerEndpointsSupplier.getEndpoints(),
 				corsProperties.toCorsConfiguration());
+	}
+
+	@Bean
+	@ConditionalOnBean(EndpointObjectMapper.class)
+	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+	static EndpointObjectMapperWebMvcConfigurer endpointObjectMapperWebMvcConfigurer(
+			EndpointObjectMapper endpointObjectMapper) {
+		return new EndpointObjectMapperWebMvcConfigurer(endpointObjectMapper);
+	}
+
+	/**
+	 * {@link WebMvcConfigurer} to apply {@link EndpointObjectMapper} for
+	 * {@link OperationResponseBody} to {@link MappingJackson2HttpMessageConverter}
+	 * instances.
+	 */
+	static class EndpointObjectMapperWebMvcConfigurer implements WebMvcConfigurer {
+
+		private static final List<MediaType> MEDIA_TYPES = Collections
+				.unmodifiableList(Arrays.asList(MediaType.APPLICATION_JSON, new MediaType("application", "*+json")));
+
+		private final EndpointObjectMapper endpointObjectMapper;
+
+		EndpointObjectMapperWebMvcConfigurer(EndpointObjectMapper endpointObjectMapper) {
+			this.endpointObjectMapper = endpointObjectMapper;
+		}
+
+		@Override
+		public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+			for (HttpMessageConverter<?> converter : converters) {
+				if (converter instanceof MappingJackson2HttpMessageConverter) {
+					configure((MappingJackson2HttpMessageConverter) converter);
+				}
+			}
+		}
+
+		private void configure(MappingJackson2HttpMessageConverter converter) {
+			converter.registerObjectMappersForType(OperationResponseBody.class, (associations) -> {
+				ObjectMapper objectMapper = this.endpointObjectMapper.get();
+				MEDIA_TYPES.forEach((mimeType) -> associations.put(mimeType, objectMapper));
+			});
+		}
+
 	}
 
 }

@@ -13,6 +13,13 @@ configurations {
 	intTestDependencies {
 		extendsFrom dependencyManagement
 	}
+	propertyDefaults
+}
+
+artifacts {
+	propertyDefaults(file("build/resources/main/org/springframework/boot/devtools/env/devtools-property-defaults.properties")) {
+		builtBy(processResources)
+	}
 }
 
 dependencies {
@@ -24,7 +31,7 @@ dependencies {
 	intTestImplementation(project(":spring-boot-project:spring-boot-autoconfigure"))
 	intTestImplementation(project(":spring-boot-project:spring-boot-test"))
 	intTestImplementation(project(":spring-boot-project:spring-boot-tools:spring-boot-test-support"))
-	intTestImplementation("org.apache.httpcomponents:httpclient")
+	intTestImplementation("org.apache.httpcomponents.client5:httpclient5")
 	intTestImplementation("org.assertj:assertj-core")
 	intTestImplementation("org.awaitility:awaitility")
 	intTestImplementation("org.junit.jupiter:junit-jupiter")
@@ -32,9 +39,11 @@ dependencies {
 
 	intTestRuntimeOnly("org.springframework:spring-web")
 
-	optional("javax.servlet:javax.servlet-api")
-	optional("org.apache.derby:derby")
-	optional("org.hibernate:hibernate-core")
+	optional("io.projectreactor:reactor-core")
+	optional("io.r2dbc:r2dbc-spi")
+	optional("jakarta.servlet:jakarta.servlet-api")
+	optional("org.apache.derby:derbytools")
+	optional("org.hibernate.orm:hibernate-core")
 	optional("org.springframework:spring-jdbc")
 	optional("org.springframework:spring-orm")
 	optional("org.springframework:spring-web")
@@ -48,13 +57,16 @@ dependencies {
 	testImplementation("ch.qos.logback:logback-classic")
 	testImplementation("com.h2database:h2")
 	testImplementation("com.zaxxer:HikariCP")
+	testImplementation("org.apache.derby:derby")
 	testImplementation("org.apache.derby:derbyclient")
 	testImplementation("org.apache.tomcat.embed:tomcat-embed-websocket")
 	testImplementation("org.apache.tomcat.embed:tomcat-embed-core")
 	testImplementation("org.apache.tomcat.embed:tomcat-embed-jasper")
 	testImplementation("org.assertj:assertj-core")
 	testImplementation("org.awaitility:awaitility")
-	testImplementation("org.eclipse.jetty.websocket:websocket-client")
+	testImplementation("org.eclipse.jetty.websocket:websocket-jakarta-client") {
+		exclude group: "org.eclipse.jetty.toolchain", module: "jetty-jakarta-websocket-api"
+	}
 	testImplementation("org.hamcrest:hamcrest-library")
 	testImplementation("org.hsqldb:hsqldb")
 	testImplementation("org.junit.jupiter:junit-jupiter")
@@ -66,12 +78,11 @@ dependencies {
 	testImplementation("org.springframework:spring-websocket")
 	testImplementation("org.springframework.hateoas:spring-hateoas")
 	testImplementation("org.springframework.security:spring-security-test")
-	testImplementation("org.thymeleaf:thymeleaf")
-	testImplementation("org.thymeleaf:thymeleaf-spring5")
-	testImplementation("nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect")
+	testImplementation("org.freemarker:freemarker")
 
 	testRuntimeOnly("org.aspectj:aspectjweaver")
 	testRuntimeOnly("org.yaml:snakeyaml")
+	testRuntimeOnly("io.r2dbc:r2dbc-h2")
 }
 
 task syncIntTestDependencies(type: Sync) {

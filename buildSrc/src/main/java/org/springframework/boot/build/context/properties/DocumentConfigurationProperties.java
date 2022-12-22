@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,13 +125,13 @@ public class DocumentConfigurationProperties extends DefaultTask {
 
 	private void dataPrefixes(Config config) {
 		config.accept("spring.couchbase");
+		config.accept("spring.cassandra");
 		config.accept("spring.elasticsearch");
 		config.accept("spring.h2");
 		config.accept("spring.influx");
 		config.accept("spring.ldap");
 		config.accept("spring.mongodb");
 		config.accept("spring.neo4j");
-		config.accept("spring.redis");
 		config.accept("spring.dao");
 		config.accept("spring.data");
 		config.accept("spring.datasource");
@@ -174,13 +174,14 @@ public class DocumentConfigurationProperties extends DefaultTask {
 	}
 
 	private void webPrefixes(Config prefix) {
+		prefix.accept("spring.graphql");
 		prefix.accept("spring.hateoas");
 		prefix.accept("spring.http");
-		prefix.accept("spring.servlet");
 		prefix.accept("spring.jersey");
 		prefix.accept("spring.mvc");
 		prefix.accept("spring.netty");
 		prefix.accept("spring.resources");
+		prefix.accept("spring.servlet");
 		prefix.accept("spring.session");
 		prefix.accept("spring.web");
 		prefix.accept("spring.webflux");

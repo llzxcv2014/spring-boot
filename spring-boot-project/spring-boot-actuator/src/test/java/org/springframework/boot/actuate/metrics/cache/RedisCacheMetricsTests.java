@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ class RedisCacheMetricsTests {
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 			.withConfiguration(AutoConfigurations.of(RedisAutoConfiguration.class, CacheAutoConfiguration.class))
 			.withUserConfiguration(CachingConfiguration.class).withPropertyValues(
-					"spring.redis.host=" + redis.getHost(), "spring.redis.port=" + redis.getFirstMappedPort(),
+					"spring.data.redis.host=" + redis.getHost(), "spring.data.redis.port=" + redis.getFirstMappedPort(),
 					"spring.cache.type=redis", "spring.cache.redis.enable-statistics=true");
 
 	@Test

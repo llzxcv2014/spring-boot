@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import org.springframework.util.StringUtils;
  * @author Gary Russell
  * @author Artsiom Yudovin
  * @author Franjo Zilic
+ * @author Eddú Meléndez
  * @since 1.0.0
  */
 @ConfigurationProperties(prefix = "spring.rabbitmq")
@@ -900,7 +901,7 @@ public class RabbitProperties {
 		 * Whether the container will support listeners that consume native stream
 		 * messages instead of Spring AMQP messages.
 		 */
-		boolean nativeListener;
+		private boolean nativeListener;
 
 		public boolean isNativeListener() {
 			return this.nativeListener;
@@ -922,12 +923,12 @@ public class RabbitProperties {
 		private Boolean mandatory;
 
 		/**
-		 * Timeout for `receive()` operations.
+		 * Timeout for receive() operations.
 		 */
 		private Duration receiveTimeout;
 
 		/**
-		 * Timeout for `sendAndReceive()` operations.
+		 * Timeout for sendAndReceive() operations.
 		 */
 		private Duration replyTimeout;
 
@@ -1152,14 +1153,15 @@ public class RabbitProperties {
 		}
 
 		private void parseHostAndPort(String input, boolean sslEnabled) {
-			int portIndex = input.indexOf(':');
-			if (portIndex == -1) {
+			int bracketIndex = input.lastIndexOf(']');
+			int colonIndex = input.lastIndexOf(':');
+			if (colonIndex == -1 || colonIndex < bracketIndex) {
 				this.host = input;
 				this.port = (determineSslEnabled(sslEnabled)) ? DEFAULT_PORT_SECURE : DEFAULT_PORT;
 			}
 			else {
-				this.host = input.substring(0, portIndex);
-				this.port = Integer.parseInt(input.substring(portIndex + 1));
+				this.host = input.substring(0, colonIndex);
+				this.port = Integer.parseInt(input.substring(colonIndex + 1));
 			}
 		}
 
@@ -1193,6 +1195,11 @@ public class RabbitProperties {
 		 */
 		private String password;
 
+		/**
+		 * Name of the stream.
+		 */
+		private String name;
+
 		public String getHost() {
 			return this.host;
 		}
@@ -1223,6 +1230,14 @@ public class RabbitProperties {
 
 		public void setPassword(String password) {
 			this.password = password;
+		}
+
+		public String getName() {
+			return this.name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
 		}
 
 	}

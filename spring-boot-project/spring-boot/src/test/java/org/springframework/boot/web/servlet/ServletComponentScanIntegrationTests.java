@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
-import javax.servlet.MultipartConfigElement;
-import javax.servlet.annotation.WebFilter;
-import javax.servlet.annotation.WebListener;
-import javax.servlet.annotation.WebServlet;
-
+import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.annotation.WebFilter;
+import jakarta.servlet.annotation.WebListener;
+import jakarta.servlet.annotation.WebServlet;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -37,6 +36,9 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.testsupport.classpath.ForkedClassPath;
+import org.springframework.boot.testsupport.web.servlet.DirtiesUrlFactories;
+import org.springframework.boot.testsupport.web.servlet.Servlet5ClassPathOverrides;
 import org.springframework.boot.web.context.ServerPortInfoApplicationContextInitializer;
 import org.springframework.boot.web.embedded.jetty.JettyServletWebServerFactory;
 import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
@@ -56,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Andy Wilkinson
  */
+@DirtiesUrlFactories
 class ServletComponentScanIntegrationTests {
 
 	private AnnotationConfigServletWebServerApplicationContext context;
@@ -72,6 +75,7 @@ class ServletComponentScanIntegrationTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testConfiguration")
+	@ForkedClassPath
 	void componentsAreRegistered(String serverName, Class<?> configuration) {
 		this.context = new AnnotationConfigServletWebServerApplicationContext();
 		this.context.register(configuration);
@@ -84,6 +88,7 @@ class ServletComponentScanIntegrationTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testConfiguration")
+	@ForkedClassPath
 	void indexedComponentsAreRegistered(String serverName, Class<?> configuration) throws IOException {
 		writeIndex(this.temp);
 		this.context = new AnnotationConfigServletWebServerApplicationContext();
@@ -101,6 +106,7 @@ class ServletComponentScanIntegrationTests {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("testConfiguration")
+	@ForkedClassPath
 	void multipartConfigIsHonoured(String serverName, Class<?> configuration) {
 		this.context = new AnnotationConfigServletWebServerApplicationContext();
 		this.context.register(configuration);
@@ -153,6 +159,7 @@ class ServletComponentScanIntegrationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
+	@Servlet5ClassPathOverrides
 	static class JettyTestConfiguration extends AbstractTestConfiguration {
 
 		@Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import org.bson.codecs.Codec;
 import org.bson.codecs.configuration.CodecRegistry;
 import reactor.core.publisher.Mono;
 
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -36,7 +36,6 @@ import org.springframework.boot.autoconfigure.mongo.MongoProperties.Gridfs;
 import org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
@@ -69,12 +68,11 @@ import org.springframework.util.StringUtils;
  * @author Artsiom Yudovin
  * @since 2.0.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(after = MongoReactiveAutoConfiguration.class)
 @ConditionalOnClass({ MongoClient.class, ReactiveMongoTemplate.class })
 @ConditionalOnBean(MongoClient.class)
 @EnableConfigurationProperties(MongoProperties.class)
 @Import(MongoDataConfiguration.class)
-@AutoConfigureAfter(MongoReactiveAutoConfiguration.class)
 public class MongoReactiveDataAutoConfiguration {
 
 	@Bean

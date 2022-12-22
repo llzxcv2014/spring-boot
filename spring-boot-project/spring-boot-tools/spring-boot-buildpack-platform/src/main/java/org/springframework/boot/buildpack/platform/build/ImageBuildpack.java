@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,12 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 
+import org.springframework.boot.buildpack.platform.build.BuildpackLayersMetadata.BuildpackLayerDetails;
 import org.springframework.boot.buildpack.platform.docker.transport.DockerEngineException;
 import org.springframework.boot.buildpack.platform.docker.type.Image;
 import org.springframework.boot.buildpack.platform.docker.type.ImageReference;
 import org.springframework.boot.buildpack.platform.docker.type.Layer;
+import org.springframework.boot.buildpack.platform.docker.type.LayerId;
 import org.springframework.boot.buildpack.platform.io.IOConsumer;
 import org.springframework.boot.buildpack.platform.io.TarArchive;
 import org.springframework.util.StreamUtils;
@@ -54,15 +56,24 @@ final class ImageBuildpack implements Buildpack {
 	private final ExportedLayers exportedLayers;
 
 	private ImageBuildpack(BuildpackResolverContext context, ImageReference imageReference) {
+		ImageReference reference = imageReference.inTaggedOrDigestForm();
 		try {
-			Image image = context.fetchImage(imageReference, ImageType.BUILDPACK);
+			Image image = context.fetchImage(reference, ImageType.BUILDPACK);
 			BuildpackMetadata buildpackMetadata = BuildpackMetadata.fromImage(image);
 			this.coordinates = BuildpackCoordinates.fromBuildpackMetadata(buildpackMetadata);
-			this.exportedLayers = new ExportedLayers(context, imageReference);
+			this.exportedLayers = (!buildpackExistsInBuilder(context, image.getLayers()))
+					? new ExportedLayers(context, reference) : null;
 		}
 		catch (IOException | DockerEngineException ex) {
-			throw new IllegalArgumentException("Error pulling buildpack image '" + imageReference + "'", ex);
+			throw new IllegalArgumentException("Error pulling buildpack image '" + reference + "'", ex);
 		}
+	}
+
+	private boolean buildpackExistsInBuilder(BuildpackResolverContext context, List<LayerId> imageLayers) {
+		BuildpackLayerDetails buildpackLayerDetails = context.getBuildpackLayersMetadata()
+				.getBuildpack(this.coordinates.getId(), this.coordinates.getVersion());
+		String layerDiffId = (buildpackLayerDetails != null) ? buildpackLayerDetails.getLayerDiffId() : null;
+		return (layerDiffId != null) && imageLayers.stream().map(LayerId::toString).anyMatch(layerDiffId::equals);
 	}
 
 	@Override
@@ -72,7 +83,9 @@ final class ImageBuildpack implements Buildpack {
 
 	@Override
 	public void apply(IOConsumer<Layer> layers) throws IOException {
-		this.exportedLayers.apply(layers);
+		if (this.exportedLayers != null) {
+			this.exportedLayers.apply(layers);
+		}
 	}
 
 	/**

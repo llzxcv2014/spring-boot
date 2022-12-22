@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ public abstract class OnEndpointElementCondition extends SpringBootCondition {
 		if (outcome != null) {
 			return outcome;
 		}
-		return getDefaultEndpointsOutcome(context);
+		return getDefaultOutcome(context, annotationAttributes);
 	}
 
 	protected ConditionOutcome getEndpointOutcome(ConditionContext context, String endpointName) {
@@ -68,7 +68,16 @@ public abstract class OnEndpointElementCondition extends SpringBootCondition {
 		return null;
 	}
 
-	protected ConditionOutcome getDefaultEndpointsOutcome(ConditionContext context) {
+	/**
+	 * Return the default outcome that should be used if property is not set. By default
+	 * this method will use the {@code <prefix>.defaults.enabled} property, matching if it
+	 * is {@code true} or if it is not configured.
+	 * @param context the condition context
+	 * @param annotationAttributes the annotation attributes
+	 * @return the default outcome
+	 * @since 2.6.0
+	 */
+	protected ConditionOutcome getDefaultOutcome(ConditionContext context, AnnotationAttributes annotationAttributes) {
 		boolean match = Boolean
 				.parseBoolean(context.getEnvironment().getProperty(this.prefix + "defaults.enabled", "true"));
 		return new ConditionOutcome(match, ConditionMessage.forCondition(this.annotationType)

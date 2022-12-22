@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,12 @@ package org.springframework.boot.context.properties;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyEditorRegistry;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.boot.context.properties.bind.AbstractBindHandler;
@@ -113,7 +111,7 @@ class ConfigurationPropertiesBinder {
 	private <T> BindHandler getBindHandler(Bindable<T> target, ConfigurationProperties annotation) {
 		List<Validator> validators = getValidators(target);
 		BindHandler handler = getHandler();
-		handler = new ConfigurationPropertiesBindHander(handler);
+		handler = new ConfigurationPropertiesBindHandler(handler);
 		if (annotation.ignoreInvalidFields()) {
 			handler = new IgnoreErrorsBindHandler(handler);
 		}
@@ -145,8 +143,8 @@ class ConfigurationPropertiesBinder {
 		if (this.jsr303Present && target.getAnnotation(Validated.class) != null) {
 			validators.add(getJsr303Validator());
 		}
-		if (target.getValue() != null && target.getValue().get() instanceof Validator) {
-			validators.add((Validator) target.getValue().get());
+		if (target.getValue() != null && target.getValue().get() instanceof Validator validator) {
+			validators.add(validator);
 		}
 		return validators;
 	}
@@ -160,14 +158,13 @@ class ConfigurationPropertiesBinder {
 
 	private List<ConfigurationPropertiesBindHandlerAdvisor> getBindHandlerAdvisors() {
 		return this.applicationContext.getBeanProvider(ConfigurationPropertiesBindHandlerAdvisor.class).orderedStream()
-				.collect(Collectors.toList());
+				.toList();
 	}
 
 	private Binder getBinder() {
 		if (this.binder == null) {
 			this.binder = new Binder(getConfigurationPropertySources(), getPropertySourcesPlaceholdersResolver(),
-					getConversionServices(), getPropertyEditorInitializer(), null,
-					ConfigurationPropertiesBindConstructorProvider.INSTANCE);
+					getConversionServices(), getPropertyEditorInitializer(), null, null);
 		}
 		return this.binder;
 	}
@@ -185,24 +182,22 @@ class ConfigurationPropertiesBinder {
 	}
 
 	private Consumer<PropertyEditorRegistry> getPropertyEditorInitializer() {
-		if (this.applicationContext instanceof ConfigurableApplicationContext) {
-			return ((ConfigurableApplicationContext) this.applicationContext).getBeanFactory()::copyRegisteredEditorsTo;
+		if (this.applicationContext instanceof ConfigurableApplicationContext configurableContext) {
+			return configurableContext.getBeanFactory()::copyRegisteredEditorsTo;
 		}
 		return null;
 	}
 
 	static void register(BeanDefinitionRegistry registry) {
 		if (!registry.containsBeanDefinition(FACTORY_BEAN_NAME)) {
-			AbstractBeanDefinition definition = BeanDefinitionBuilder
-					.genericBeanDefinition(ConfigurationPropertiesBinder.Factory.class,
-							ConfigurationPropertiesBinder.Factory::new)
-					.getBeanDefinition();
+			BeanDefinition definition = BeanDefinitionBuilder
+					.rootBeanDefinition(ConfigurationPropertiesBinder.Factory.class).getBeanDefinition();
 			definition.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
 			registry.registerBeanDefinition(ConfigurationPropertiesBinder.FACTORY_BEAN_NAME, definition);
 		}
 		if (!registry.containsBeanDefinition(BEAN_NAME)) {
-			AbstractBeanDefinition definition = BeanDefinitionBuilder
-					.genericBeanDefinition(ConfigurationPropertiesBinder.class,
+			BeanDefinition definition = BeanDefinitionBuilder
+					.rootBeanDefinition(ConfigurationPropertiesBinder.class,
 							() -> ((BeanFactory) registry)
 									.getBean(FACTORY_BEAN_NAME, ConfigurationPropertiesBinder.Factory.class).create())
 					.getBeanDefinition();
@@ -240,9 +235,9 @@ class ConfigurationPropertiesBinder {
 	 * {@link BindHandler} to deal with
 	 * {@link ConfigurationProperties @ConfigurationProperties} concerns.
 	 */
-	private static class ConfigurationPropertiesBindHander extends AbstractBindHandler {
+	private static class ConfigurationPropertiesBindHandler extends AbstractBindHandler {
 
-		ConfigurationPropertiesBindHander(BindHandler handler) {
+		ConfigurationPropertiesBindHandler(BindHandler handler) {
 			super(handler);
 		}
 

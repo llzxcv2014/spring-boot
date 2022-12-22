@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,18 +23,18 @@ import org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegi
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties.Data.Repository;
+import org.springframework.boot.actuate.autoconfigure.metrics.PropertiesAutoTimer;
 import org.springframework.boot.actuate.autoconfigure.metrics.export.simple.SimpleMetricsExportAutoConfiguration;
 import org.springframework.boot.actuate.metrics.data.DefaultRepositoryTagsProvider;
 import org.springframework.boot.actuate.metrics.data.MetricsRepositoryMethodInvocationListener;
 import org.springframework.boot.actuate.metrics.data.RepositoryTagsProvider;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.util.function.SingletonSupplier;
 
 /**
@@ -43,10 +43,9 @@ import org.springframework.util.function.SingletonSupplier;
  * @author Phillip Webb
  * @since 2.5.0
  */
-@Configuration(proxyBeanMethods = false)
-@ConditionalOnClass(org.springframework.data.repository.Repository.class)
-@AutoConfigureAfter({ MetricsAutoConfiguration.class, CompositeMeterRegistryAutoConfiguration.class,
+@AutoConfiguration(after = { MetricsAutoConfiguration.class, CompositeMeterRegistryAutoConfiguration.class,
 		SimpleMetricsExportAutoConfiguration.class })
+@ConditionalOnClass(org.springframework.data.repository.Repository.class)
 @ConditionalOnBean(MeterRegistry.class)
 @EnableConfigurationProperties(MetricsProperties.class)
 public class RepositoryMetricsAutoConfiguration {
@@ -69,7 +68,7 @@ public class RepositoryMetricsAutoConfiguration {
 			ObjectProvider<MeterRegistry> registry, RepositoryTagsProvider tagsProvider) {
 		Repository properties = this.properties.getData().getRepository();
 		return new MetricsRepositoryMethodInvocationListener(registry::getObject, tagsProvider,
-				properties.getMetricName(), properties.getAutotime());
+				properties.getMetricName(), new PropertiesAutoTimer(properties.getAutotime()));
 	}
 
 	@Bean

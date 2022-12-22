@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,13 @@
 
 package org.springframework.boot.actuate.autoconfigure.endpoint.jmx;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Function;
 
 import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,10 +37,15 @@ import org.springframework.boot.actuate.endpoint.jmx.annotation.JmxEndpointDisco
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.ContextConsumer;
+import org.springframework.context.ConfigurableApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 /**
  * Tests for {@link JmxEndpointAutoConfiguration}.
@@ -44,6 +53,9 @@ import static org.mockito.Mockito.verify;
  * @author Stephane Nicoll
  */
 class JmxEndpointAutoConfigurationTests {
+
+	private static final ContextConsumer<ConfigurableApplicationContext> NO_OPERATION = (context) -> {
+	};
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 			.withConfiguration(AutoConfigurations.of(EndpointAutoConfiguration.class, JmxAutoConfiguration.class,
@@ -68,14 +80,35 @@ class JmxEndpointAutoConfigurationTests {
 	@Test
 	void jmxEndpointWithCustomEndpointObjectNameFactory() {
 		EndpointObjectNameFactory factory = mock(EndpointObjectNameFactory.class);
-		this.contextRunner.withPropertyValues("spring.jmx.enabled=true").with(mockMBeanServer())
-				.withBean(EndpointObjectNameFactory.class, () -> factory).run((context) -> {
+		this.contextRunner
+				.withPropertyValues("spring.jmx.enabled=true", "management.endpoints.jmx.exposure.include=test")
+				.with(mockMBeanServer()).withBean(EndpointObjectNameFactory.class, () -> factory).run((context) -> {
 					ArgumentCaptor<ExposableJmxEndpoint> argumentCaptor = ArgumentCaptor
 							.forClass(ExposableJmxEndpoint.class);
-					verify(factory).getObjectName(argumentCaptor.capture());
+					then(factory).should().getObjectName(argumentCaptor.capture());
 					ExposableJmxEndpoint jmxEndpoint = argumentCaptor.getValue();
 					assertThat(jmxEndpoint.getEndpointId().toLowerCaseString()).isEqualTo("test");
 				});
+	}
+
+	@Test
+	void jmxEndpointWithContextHierarchyGeneratesUniqueNamesForEachEndpoint() throws Exception {
+		given(this.mBeanServer.queryNames(any(), any()))
+				.willReturn(new HashSet<>(Arrays.asList(new ObjectName("test:test=test"))));
+		ArgumentCaptor<ObjectName> objectName = ArgumentCaptor.forClass(ObjectName.class);
+		ApplicationContextRunner jmxEnabledContextRunner = this.contextRunner
+				.withPropertyValues("spring.jmx.enabled=true", "management.endpoints.jmx.exposure.include=test");
+		jmxEnabledContextRunner.with(mockMBeanServer()).run((parent) -> {
+			jmxEnabledContextRunner.withParent(parent).run(NO_OPERATION);
+			jmxEnabledContextRunner.withParent(parent).run(NO_OPERATION);
+		});
+		then(this.mBeanServer).should(times(3)).registerMBean(any(Object.class), objectName.capture());
+		Set<ObjectName> uniqueValues = new HashSet<>(objectName.getAllValues());
+		assertThat(uniqueValues).hasSize(3);
+		assertThat(uniqueValues).allMatch((name) -> name.getDomain().equals("org.springframework.boot"));
+		assertThat(uniqueValues).allMatch((name) -> name.getKeyProperty("type").equals("Endpoint"));
+		assertThat(uniqueValues).allMatch((name) -> name.getKeyProperty("name").equals("Test"));
+		assertThat(uniqueValues).allMatch((name) -> name.getKeyProperty("context") != null);
 	}
 
 	private Function<ApplicationContextRunner, ApplicationContextRunner> mockMBeanServer() {

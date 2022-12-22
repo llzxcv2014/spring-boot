@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 
-import javax.jms.ConnectionFactory;
-import javax.jms.Message;
-import javax.jms.TextMessage;
-
+import jakarta.jms.ConnectionFactory;
+import jakarta.jms.Message;
+import jakarta.jms.TextMessage;
 import org.apache.activemq.artemis.api.core.RoutingType;
 import org.apache.activemq.artemis.api.core.SimpleString;
 import org.apache.activemq.artemis.api.core.TransportConfiguration;
@@ -129,26 +128,6 @@ class ArtemisAutoConfigurationTests {
 				.withPropertyValues("spring.artemis.mode:native", "spring.artemis.broker-url:tcp://192.168.1.144:9876")
 				.run((context) -> assertNettyConnectionFactory(
 						getActiveMQConnectionFactory(getConnectionFactory(context)), "192.168.1.144", 9876));
-	}
-
-	@Test
-	@Deprecated
-	void nativeConnectionFactoryCustomHost() {
-		this.contextRunner.withUserConfiguration(EmptyConfiguration.class)
-				.withPropertyValues("spring.artemis.mode:native", "spring.artemis.host:192.168.1.144",
-						"spring.artemis.port:9876")
-				.run((context) -> assertNettyConnectionFactory(
-						getActiveMQConnectionFactory(getConnectionFactory(context)), "192.168.1.144", 9876));
-	}
-
-	@Test
-	@Deprecated
-	void nativeConnectionFactoryCustomBrokerUrlAndHost() {
-		this.contextRunner.withUserConfiguration(EmptyConfiguration.class)
-				.withPropertyValues("spring.artemis.mode:native", "spring.artemis.host:192.168.1.144",
-						"spring.artemis.port:9876", "spring.artemis.broker-url=tcp://192.168.1.221:6543")
-				.run((context) -> assertNettyConnectionFactory(
-						getActiveMQConnectionFactory(getConnectionFactory(context)), "192.168.1.221", 6543));
 	}
 
 	@Test
@@ -397,8 +376,8 @@ class ArtemisAutoConfigurationTests {
 		assertThat(transportConfig.getFactoryClassName()).isEqualTo(NettyConnectorFactory.class.getName());
 		assertThat(transportConfig.getParams().get("host")).isEqualTo(host);
 		Object transportConfigPort = transportConfig.getParams().get("port");
-		if (transportConfigPort instanceof String) {
-			transportConfigPort = Integer.parseInt((String) transportConfigPort);
+		if (transportConfigPort instanceof String portString) {
+			transportConfigPort = Integer.parseInt(portString);
 		}
 		assertThat(transportConfigPort).isEqualTo(port);
 		return transportConfig;

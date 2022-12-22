@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration tests for the Maven plugin's build info support.
  *
  * @author Andy Wilkinson
+ * @author Vedran Pavic
  */
 @ExtendWith(MavenBuildExtension.class)
 class BuildInfoIntegrationTests {
@@ -89,6 +90,21 @@ class BuildInfoIntegrationTests {
 				.doesNotContainBuildTime()));
 	}
 
+	@TestTemplate
+	void whenBuildTimeIsExcludedIfDoesNotAppearInGeneratedBuildInfo(MavenBuild mavenBuild) {
+		mavenBuild.project("build-info-exclude-build-time").execute(buildInfo((buildInfo) -> assertThat(buildInfo)
+				.hasBuildGroup("org.springframework.boot.maven.it").hasBuildArtifact("build-info-exclude-build-time")
+				.hasBuildName("Generate build info with excluded build time").hasBuildVersion("0.0.1.BUILD-SNAPSHOT")
+				.doesNotContainBuildTime()));
+	}
+
+	@TestTemplate
+	void whenBuildPropertiesAreExcludedTheyDoNotAppearInGeneratedBuildInfo(MavenBuild mavenBuild) {
+		mavenBuild.project("build-info-exclude-build-properties").execute(
+				buildInfo((buildInfo) -> assertThat(buildInfo).doesNotContainBuildGroup().doesNotContainBuildArtifact()
+						.doesNotContainBuildName().doesNotContainBuildVersion().containsBuildTime()));
+	}
+
 	private ProjectCallback buildInfo(Consumer<AssertProvider<BuildInfoAssert>> buildInfo) {
 		return buildInfo("target/classes/META-INF/build-info.properties", buildInfo);
 	}
@@ -98,10 +114,10 @@ class BuildInfoIntegrationTests {
 	}
 
 	private AssertProvider<BuildInfoAssert> buildInfo(File project, String buildInfo) {
-		return new AssertProvider<BuildInfoAssert>() {
+		return new AssertProvider<>() {
 
 			@Override
-			@Deprecated
+			@Deprecated(since = "2.3.0", forRemoval = false)
 			public BuildInfoAssert assertThat() {
 				return new BuildInfoAssert(new File(project, buildInfo));
 			}
@@ -130,16 +146,32 @@ class BuildInfoIntegrationTests {
 			return containsEntry("build.group", expected);
 		}
 
+		BuildInfoAssert doesNotContainBuildGroup() {
+			return doesNotContainKey("build.group");
+		}
+
 		BuildInfoAssert hasBuildArtifact(String expected) {
 			return containsEntry("build.artifact", expected);
+		}
+
+		BuildInfoAssert doesNotContainBuildArtifact() {
+			return doesNotContainKey("build.artifact");
 		}
 
 		BuildInfoAssert hasBuildName(String expected) {
 			return containsEntry("build.name", expected);
 		}
 
+		BuildInfoAssert doesNotContainBuildName() {
+			return doesNotContainKey("build.name");
+		}
+
 		BuildInfoAssert hasBuildVersion(String expected) {
 			return containsEntry("build.version", expected);
+		}
+
+		BuildInfoAssert doesNotContainBuildVersion() {
+			return doesNotContainKey("build.version");
 		}
 
 		BuildInfoAssert containsBuildTime() {

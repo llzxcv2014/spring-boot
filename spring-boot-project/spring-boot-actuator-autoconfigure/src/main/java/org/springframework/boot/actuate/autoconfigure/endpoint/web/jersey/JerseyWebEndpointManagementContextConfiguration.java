@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,11 +22,16 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.Priority;
+import jakarta.ws.rs.Priorities;
+import jakarta.ws.rs.ext.ContextResolver;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.model.Resource;
 
+import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
+import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.web.ManagementContextConfiguration;
 import org.springframework.boot.actuate.autoconfigure.web.jersey.ManagementContextResourceConfigCustomizer;
@@ -34,7 +39,9 @@ import org.springframework.boot.actuate.autoconfigure.web.server.ConditionalOnMa
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
 import org.springframework.boot.actuate.endpoint.EndpointId;
 import org.springframework.boot.actuate.endpoint.ExposableEndpoint;
+import org.springframework.boot.actuate.endpoint.OperationResponseBody;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.jackson.EndpointObjectMapper;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.EndpointMediaTypes;
@@ -52,6 +59,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
+import org.springframework.boot.autoconfigure.jersey.ResourceConfigCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
@@ -86,14 +94,22 @@ class JerseyWebEndpointManagementContextConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean(HealthEndpoint.class)
 	@ConditionalOnManagementPort(ManagementPortType.DIFFERENT)
+	@ConditionalOnBean(HealthEndpoint.class)
+	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class, exposure = EndpointExposure.WEB)
 	JerseyAdditionalHealthEndpointPathsManagementResourcesRegistrar jerseyDifferentPortAdditionalHealthEndpointPathsResourcesRegistrar(
 			WebEndpointsSupplier webEndpointsSupplier, HealthEndpointGroups healthEndpointGroups) {
 		Collection<ExposableWebEndpoint> webEndpoints = webEndpointsSupplier.getEndpoints();
 		ExposableWebEndpoint health = webEndpoints.stream()
 				.filter((endpoint) -> endpoint.getEndpointId().equals(HEALTH_ENDPOINT_ID)).findFirst().get();
 		return new JerseyAdditionalHealthEndpointPathsManagementResourcesRegistrar(health, healthEndpointGroups);
+	}
+
+	@Bean
+	@ConditionalOnBean(EndpointObjectMapper.class)
+	ResourceConfigCustomizer endpointObjectMapperResourceConfigCustomizer(EndpointObjectMapper endpointObjectMapper) {
+		return (config) -> config.register(new EndpointObjectMapperContextResolver(endpointObjectMapper),
+				ContextResolver.class);
 	}
 
 	private boolean shouldRegisterLinksMapping(WebEndpointProperties properties, Environment environment,
@@ -180,12 +196,32 @@ class JerseyWebEndpointManagementContextConfiguration {
 					WebServerNamespace.MANAGEMENT, this.groups);
 			Collection<Resource> endpointResources = resourceFactory
 					.createEndpointResources(mapping, Collections.singletonList(this.endpoint), null, null, false)
-					.stream().filter(Objects::nonNull).collect(Collectors.toList());
+					.stream().filter(Objects::nonNull).toList();
 			register(endpointResources, config);
 		}
 
 		private void register(Collection<Resource> resources, ResourceConfig config) {
 			config.registerResources(new HashSet<>(resources));
+		}
+
+	}
+
+	/**
+	 * {@link ContextResolver} used to obtain the {@link ObjectMapper} that should be used
+	 * for {@link OperationResponseBody} instances.
+	 */
+	@Priority(Priorities.USER - 100)
+	private static final class EndpointObjectMapperContextResolver implements ContextResolver<ObjectMapper> {
+
+		private final EndpointObjectMapper endpointObjectMapper;
+
+		private EndpointObjectMapperContextResolver(EndpointObjectMapper endpointObjectMapper) {
+			this.endpointObjectMapper = endpointObjectMapper;
+		}
+
+		@Override
+		public ObjectMapper getContext(Class<?> type) {
+			return OperationResponseBody.class.isAssignableFrom(type) ? this.endpointObjectMapper.get() : null;
 		}
 
 	}

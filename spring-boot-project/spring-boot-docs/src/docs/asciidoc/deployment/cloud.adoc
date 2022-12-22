@@ -45,7 +45,7 @@ At this point, `cf` starts uploading your application, producing output similar 
 	Preparing to start acloudyspringtime... *OK*
 	-----> Downloaded app package (*8.9M*)
 	-----> Java Buildpack Version: v3.12 (offline) | https://github.com/cloudfoundry/java-buildpack.git#6f25b7e
-	-----> Downloading Open Jdk JRE 1.8.0_121 from https://java-buildpack.cloudfoundry.org/openjdk/trusty/x86_64/openjdk-1.8.0_121.tar.gz (found in cache)
+	-----> Downloading Open Jdk JRE
 	       Expanding Open Jdk JRE to .java-buildpack/open_jdk_jre (1.6s)
 	-----> Downloading Open JDK Like Memory Calculator 2.0.2_RELEASE from https://java-buildpack.cloudfoundry.org/memory-calculator/trusty/x86_64/memory-calculator-2.0.2_RELEASE.tar.gz (found in cache)
 	       Memory Settings: -Xss349K -Xmx681574K -XX:MaxMetaspaceSize=104857K -Xms681574K -XX:MetaspaceSize=104857K
@@ -93,10 +93,7 @@ Process-scoped environment variables are language agnostic.
 
 Environment variables do not always make for the easiest API, so Spring Boot automatically extracts them and flattens the data into properties that can be accessed through Spring's `Environment` abstraction, as shown in the following example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/deployment/cloud/cloudfoundry/bindingtoservices/MyBean.java[]
-----
+include::code:MyBean[]
 
 All Cloud Foundry properties are prefixed with `vcap`.
 You can use `vcap` properties to access application information (such as the public URL of the application) and service information (such as database credentials).
@@ -122,14 +119,14 @@ Because this shutdown processing happens in parallel (and due to the nature of d
 
 You can configure a sleep execution in a preStop handler to avoid requests being routed to a pod that has already begun shutting down.
 This sleep should be long enough for new requests to stop being routed to the pod and its duration will vary from deployment to deployment.
-The preStop handler can be configured via the PodSpec in the pod's configuration file as follows:
+The preStop handler can be configured by using the PodSpec in the pod's configuration file as follows:
 
-[source,yml,indent=0,subs="verbatim"]
+[source,yaml,indent=0,subs="verbatim"]
 ----
 	spec:
 	  containers:
-	  - name: example-container
-	    image: example-image
+	  - name: "example-container"
+	    image: "example-image"
 	    lifecycle:
 	      preStop:
 	        exec:
@@ -140,7 +137,7 @@ Once the pre-stop hook has completed, SIGTERM will be sent to the container and 
 
 NOTE: When Kubernetes sends a SIGTERM signal to the pod, it waits for a specified time called the termination grace period (the default for which is 30 seconds).
 If the containers are still running after the grace period, they are sent the SIGKILL signal and forcibly removed.
-If the pod takes longer than 30 seconds to shut down, which could be because you've increased configprop:spring.lifecycle.timeout-per-shutdown-phase[], make sure to increase the termination grace period by setting the `terminationGracePeriodSeconds` option in the Pod YAML.
+If the pod takes longer than 30 seconds to shut down, which could be because you have increased configprop:spring.lifecycle.timeout-per-shutdown-phase[], make sure to increase the termination grace period by setting the `terminationGracePeriodSeconds` option in the Pod YAML.
 
 
 
@@ -182,8 +179,8 @@ Which will result in the following:
 	Total 95 (delta 31), reused 0 (delta 0)
 
 	-----> Java app detected
-	-----> Installing OpenJDK 1.8... *done*
-	-----> Installing Maven 3.3.1... *done*
+	-----> Installing OpenJDK... *done*
+	-----> Installing Maven... *done*
 	-----> Installing settings.xml... *done*
 	-----> Executing: mvn -B -DskipTests=true clean install
 
@@ -214,7 +211,7 @@ Which will result in the following:
 ----
 
 Your application should now be up and running on Heroku.
-For more details, refer to https://devcenter.heroku.com/articles/deploying-spring-boot-apps-to-heroku[Deploying Spring Boot Applications to Heroku].
+For more details, see https://devcenter.heroku.com/articles/deploying-spring-boot-apps-to-heroku[Deploying Spring Boot Applications to Heroku].
 
 
 
@@ -310,25 +307,25 @@ There is a https://exampledriven.wordpress.com/2017/01/09/spring-boot-aws-elasti
 
 
 [[deployment.cloud.boxfuse]]
-=== Boxfuse and Amazon Web Services
-https://boxfuse.com/[Boxfuse] works by turning your Spring Boot executable jar or war into a minimal VM image that can be deployed unchanged either on VirtualBox or on AWS.
-Boxfuse comes with deep integration for Spring Boot and uses the information from your Spring Boot configuration file to automatically configure ports and health check URLs.
-Boxfuse leverages this information both for the images it produces as well as for all the resources it provisions (instances, security groups, elastic load balancers, and so on).
+=== CloudCaptain and Amazon Web Services
+https://cloudcaptain.sh/[CloudCaptain] works by turning your Spring Boot executable jar or war into a minimal VM image that can be deployed unchanged either on VirtualBox or on AWS.
+CloudCaptain comes with deep integration for Spring Boot and uses the information from your Spring Boot configuration file to automatically configure ports and health check URLs.
+CloudCaptain leverages this information both for the images it produces as well as for all the resources it provisions (instances, security groups, elastic load balancers, and so on).
 
-Once you have created a https://console.boxfuse.com[Boxfuse account], connected it to your AWS account, installed the latest version of the Boxfuse Client, and ensured that the application has been built by Maven or Gradle (by using, for example, `mvn clean package`), you can deploy your Spring Boot application to AWS with a command similar to the following:
+Once you have created a https://console.cloudcaptain.sh[CloudCaptain account], connected it to your AWS account, installed the latest version of the CloudCaptain Client, and ensured that the application has been built by Maven or Gradle (by using, for example, `mvn clean package`), you can deploy your Spring Boot application to AWS with a command similar to the following:
 
 [source,shell,indent=0,subs="verbatim"]
 ----
 	$ boxfuse run myapp-1.0.jar -env=prod
 ----
 
-See the https://boxfuse.com/docs/commandline/run.html[`boxfuse run` documentation] for more options.
-If there is a https://boxfuse.com/docs/commandline/#configuration[`boxfuse.conf`] file present in the current directory, it is considered.
+See the https://cloudcaptain.sh/docs/commandline/run.html[`boxfuse run` documentation] for more options.
+If there is a https://cloudcaptain.sh/docs/commandline/#configuration[`boxfuse.conf`] file present in the current directory, it is considered.
 
-TIP: By default, Boxfuse activates a Spring profile named `boxfuse` on startup.
-If your executable jar or war contains an https://boxfuse.com/docs/payloads/springboot.html#configuration[`application-boxfuse.properties`] file, Boxfuse bases its configuration on the properties it contains.
+TIP: By default, CloudCaptain activates a Spring profile named `boxfuse` on startup.
+If your executable jar or war contains an https://cloudcaptain.sh/docs/payloads/springboot.html#configuration[`application-boxfuse.properties`] file, CloudCaptain bases its configuration on the properties it contains.
 
-At this point, `boxfuse` creates an image for your application, uploads it, and configures and starts the necessary resources on AWS, resulting in output similar to the following example:
+At this point, CloudCaptain creates an image for your application, uploads it, and configures and starts the necessary resources on AWS, resulting in output similar to the following example:
 
 [indent=0,subs="verbatim"]
 ----
@@ -353,7 +350,7 @@ At this point, `boxfuse` creates an image for your application, uploads it, and 
 
 Your application should now be up and running on AWS.
 
-See the blog post on https://boxfuse.com/blog/spring-boot-ec2.html[deploying Spring Boot apps on EC2] as well as the https://boxfuse.com/docs/payloads/springboot.html[documentation for the Boxfuse Spring Boot integration] to get started with a Maven build to run the app.
+See the blog post on https://cloudcaptain.sh/blog/spring-boot-ec2.html[deploying Spring Boot apps on EC2] as well as the https://cloudcaptain.sh/docs/payloads/springboot.html[documentation for the CloudCaptain Spring Boot integration] to get started with a Maven build to run the app.
 
 
 
@@ -379,26 +376,26 @@ Normally, you put this file in `src/main/appengine`, and it should resemble the 
 
 [source,yaml,indent=0,subs="verbatim"]
 ----
-	service: default
+	service: "default"
 
-	runtime: java
-	env: flex
+	runtime: "java"
+	env: "flex"
 
 	runtime_config:
-	  jdk: openjdk8
+	  jdk: "openjdk8"
 
 	handlers:
-	- url: /.*
-	  script: this field is required, but ignored
+	- url: "/.*"
+	  script: "this field is required, but ignored"
 
 	manual_scaling:
 	  instances: 1
 
 	health_check:
-	  enable_health_check: False
+	  enable_health_check: false
 
 	env_variables:
-	  ENCRYPT_KEY: your_encryption_key_here
+	  ENCRYPT_KEY: "your_encryption_key_here"
 ----
 
 You can deploy the app (for example, with a Maven plugin) by adding the project ID to the build configuration, as shown in the following example:

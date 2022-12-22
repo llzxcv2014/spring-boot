@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,9 @@ import org.springframework.core.io.ResourceLoader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willReturn;
-import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests for {@link ConfigDataEnvironmentPostProcessor}.
@@ -53,9 +50,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith(MockitoExtension.class)
 class ConfigDataEnvironmentPostProcessorTests {
 
-	private StandardEnvironment environment = new StandardEnvironment();
+	private final StandardEnvironment environment = new StandardEnvironment();
 
-	private SpringApplication application = new SpringApplication();
+	private final SpringApplication application = new SpringApplication();
 
 	@Mock
 	private ConfigDataEnvironment configDataEnvironment;
@@ -71,17 +68,11 @@ class ConfigDataEnvironmentPostProcessorTests {
 	private ArgumentCaptor<ResourceLoader> resourceLoaderCaptor;
 
 	@Test
-	@Deprecated
-	void defaultOrderMatchesDeprecatedListener() {
-		assertThat(ConfigDataEnvironmentPostProcessor.ORDER).isEqualTo(ConfigFileApplicationListener.DEFAULT_ORDER);
-	}
-
-	@Test
 	void postProcessEnvironmentWhenNoLoaderCreatesDefaultLoaderInstance() {
 		willReturn(this.configDataEnvironment).given(this.postProcessor).getConfigDataEnvironment(any(), any(), any());
 		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verify(this.postProcessor).getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
-		verify(this.configDataEnvironment).processAndApply();
+		then(this.postProcessor).should().getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
+		then(this.configDataEnvironment).should().processAndApply();
 		assertThat(this.resourceLoaderCaptor.getValue()).isInstanceOf(DefaultResourceLoader.class);
 	}
 
@@ -91,8 +82,8 @@ class ConfigDataEnvironmentPostProcessorTests {
 		this.application.setResourceLoader(resourceLoader);
 		willReturn(this.configDataEnvironment).given(this.postProcessor).getConfigDataEnvironment(any(), any(), any());
 		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verify(this.postProcessor).getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
-		verify(this.configDataEnvironment).processAndApply();
+		then(this.postProcessor).should().getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
+		then(this.configDataEnvironment).should().processAndApply();
 		assertThat(this.resourceLoaderCaptor.getValue()).isSameAs(resourceLoader);
 	}
 
@@ -101,8 +92,9 @@ class ConfigDataEnvironmentPostProcessorTests {
 		this.application.setAdditionalProfiles("dev");
 		willReturn(this.configDataEnvironment).given(this.postProcessor).getConfigDataEnvironment(any(), any(), any());
 		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verify(this.postProcessor).getConfigDataEnvironment(any(), any(), this.additionalProfilesCaptor.capture());
-		verify(this.configDataEnvironment).processAndApply();
+		then(this.postProcessor).should().getConfigDataEnvironment(any(), any(),
+				this.additionalProfilesCaptor.capture());
+		then(this.configDataEnvironment).should().processAndApply();
 		assertThat(this.additionalProfilesCaptor.getValue()).containsExactly("dev");
 	}
 
@@ -110,36 +102,9 @@ class ConfigDataEnvironmentPostProcessorTests {
 	void postProcessEnvironmentWhenNoActiveProfiles() {
 		willReturn(this.configDataEnvironment).given(this.postProcessor).getConfigDataEnvironment(any(), any(), any());
 		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verify(this.postProcessor).getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
-		verify(this.configDataEnvironment).processAndApply();
+		then(this.postProcessor).should().getConfigDataEnvironment(any(), this.resourceLoaderCaptor.capture(), any());
+		then(this.configDataEnvironment).should().processAndApply();
 		assertThat(this.environment.getActiveProfiles()).isEmpty();
-	}
-
-	@Test
-	void postProcessEnvironmentWhenUseLegacyProcessingSwitchesToLegacyMethod() {
-		ConfigDataEnvironmentPostProcessor.LegacyConfigFileApplicationListener legacyListener = mock(
-				ConfigDataEnvironmentPostProcessor.LegacyConfigFileApplicationListener.class);
-		willThrow(new UseLegacyConfigProcessingException(null)).given(this.postProcessor)
-				.getConfigDataEnvironment(any(), any(), any());
-		willReturn(legacyListener).given(this.postProcessor).getLegacyListener();
-		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verifyNoInteractions(this.configDataEnvironment);
-		verify(legacyListener).addPropertySources(eq(this.environment), any(DefaultResourceLoader.class));
-		assertThat(this.environment.getActiveProfiles()).isEmpty();
-	}
-
-	@Test
-	void postProcessEnvironmentWhenHasAdditionalProfilesAndUseLegacyProcessing() {
-		this.application.setAdditionalProfiles("dev");
-		ConfigDataEnvironmentPostProcessor.LegacyConfigFileApplicationListener legacyListener = mock(
-				ConfigDataEnvironmentPostProcessor.LegacyConfigFileApplicationListener.class);
-		willThrow(new UseLegacyConfigProcessingException(null)).given(this.postProcessor)
-				.getConfigDataEnvironment(any(), any(), any());
-		willReturn(legacyListener).given(this.postProcessor).getLegacyListener();
-		this.postProcessor.postProcessEnvironment(this.environment, this.application);
-		verifyNoInteractions(this.configDataEnvironment);
-		verify(legacyListener).addPropertySources(eq(this.environment), any(DefaultResourceLoader.class));
-		assertThat(this.environment.getActiveProfiles()).containsExactly("dev");
 	}
 
 	@Test
@@ -157,8 +122,8 @@ class ConfigDataEnvironmentPostProcessorTests {
 	}
 
 	private boolean hasDevProfile(ConfigDataResource resource) {
-		return (resource instanceof StandardConfigDataResource)
-				&& "dev".equals(((StandardConfigDataResource) resource).getProfile());
+		return (resource instanceof StandardConfigDataResource standardResource)
+				&& "dev".equals(standardResource.getProfile());
 	}
 
 }

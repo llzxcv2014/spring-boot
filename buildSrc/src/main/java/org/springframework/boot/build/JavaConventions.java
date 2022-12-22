@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import io.spring.javaformat.gradle.CheckTask;
-import io.spring.javaformat.gradle.FormatTask;
 import io.spring.javaformat.gradle.SpringJavaFormatPlugin;
+import io.spring.javaformat.gradle.tasks.CheckFormat;
+import io.spring.javaformat.gradle.tasks.Format;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -45,22 +45,26 @@ import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.testing.Test;
+import org.gradle.external.javadoc.CoreJavadocOptions;
 import org.gradle.testretry.TestRetryPlugin;
 import org.gradle.testretry.TestRetryTaskExtension;
 
+import org.springframework.boot.build.architecture.ArchitecturePlugin;
+import org.springframework.boot.build.classpath.CheckClasspathForProhibitedDependencies;
 import org.springframework.boot.build.optional.OptionalDependenciesPlugin;
 import org.springframework.boot.build.testing.TestFailuresPlugin;
 import org.springframework.boot.build.toolchain.ToolchainPlugin;
+import org.springframework.util.StringUtils;
 
 /**
  * Conventions that are applied in the presence of the {@link JavaBasePlugin}. When the
  * plugin is applied:
  *
  * <ul>
- * <li>The project is configered with source and target compatibility of 1.8
+ * <li>The project is configured with source and target compatibility of 17
  * <li>{@link SpringJavaFormatPlugin Spring Java Format}, {@link CheckstylePlugin
- * Checkstyle}, {@link TestFailuresPlugin Test Failures}, and {@link TestRetryPlugin Test
- * Retry} plugins are applied
+ * Checkstyle}, {@link TestFailuresPlugin Test Failures}, {@link TestRetryPlugin Test
+ * Retry}, and {@link ArchitecturePlugin Architecture} plugins are applied
  * <li>{@link Test} tasks are configured:
  * <ul>
  * <li>to use JUnit Platform
@@ -70,11 +74,11 @@ import org.springframework.boot.build.toolchain.ToolchainPlugin;
  * <li>A {@code testRuntimeOnly} dependency upon
  * {@code org.junit.platform:junit-platform-launcher} is added to projects with the
  * {@link JavaPlugin} applied
- * <li>{@link JavaCompile}, {@link Javadoc}, and {@link FormatTask} tasks are configured
- * to use UTF-8 encoding
- * <li>{@link JavaCompile} tasks are configured to use {@code -parameters}.
- * <li>When building with Java 8, {@link JavaCompile} tasks are also configured to:
+ * <li>{@link JavaCompile}, {@link Javadoc}, and {@link Format} tasks are configured to
+ * use UTF-8 encoding
+ * <li>{@link JavaCompile} tasks are configured to:
  * <ul>
+ * <li>Use {@code -parameters}.
  * <li>Treat warnings as errors
  * <li>Enable {@code unchecked}, {@code deprecation}, {@code rawtypes}, and {@code varags}
  * warnings
@@ -100,11 +104,12 @@ import org.springframework.boot.build.toolchain.ToolchainPlugin;
  */
 class JavaConventions {
 
-	private static final String SOURCE_AND_TARGET_COMPATIBILITY = "1.8";
+	private static final String SOURCE_AND_TARGET_COMPATIBILITY = "17";
 
 	void apply(Project project) {
 		project.getPlugins().withType(JavaBasePlugin.class, (java) -> {
 			project.getPlugins().apply(TestFailuresPlugin.class);
+			project.getPlugins().apply(ArchitecturePlugin.class);
 			configureSpringJavaFormat(project);
 			configureJavaConventions(project);
 			configureJavadocConventions(project);
@@ -112,6 +117,7 @@ class JavaConventions {
 			configureJarManifestConventions(project);
 			configureDependencyManagement(project);
 			configureToolchain(project);
+			configureProhibitedDependencyChecks(project);
 		});
 	}
 
@@ -156,8 +162,8 @@ class JavaConventions {
 		project.getTasks().withType(Test.class, (test) -> {
 			test.useJUnitPlatform();
 			test.setMaxHeapSize("1024M");
-			project.getTasks().withType(Checkstyle.class, (checkstyle) -> test.mustRunAfter(checkstyle));
-			project.getTasks().withType(CheckTask.class, (checkFormat) -> test.mustRunAfter(checkFormat));
+			project.getTasks().withType(Checkstyle.class, test::mustRunAfter);
+			project.getTasks().withType(CheckFormat.class, test::mustRunAfter);
 		});
 		project.getPlugins().withType(JavaPlugin.class, (javaPlugin) -> project.getDependencies()
 				.add(JavaPlugin.TEST_RUNTIME_ONLY_CONFIGURATION_NAME, "org.junit.platform:junit-platform-launcher"));
@@ -175,7 +181,12 @@ class JavaConventions {
 	}
 
 	private void configureJavadocConventions(Project project) {
-		project.getTasks().withType(Javadoc.class, (javadoc) -> javadoc.getOptions().source("1.8").encoding("UTF-8"));
+		project.getTasks().withType(Javadoc.class, (javadoc) -> {
+			CoreJavadocOptions options = (CoreJavadocOptions) javadoc.getOptions();
+			options.source("17");
+			options.encoding("UTF-8");
+			options.addStringOption("Xdoclint:none", "-quiet");
+		});
 	}
 
 	private void configureJavaConventions(Project project) {
@@ -193,23 +204,23 @@ class JavaConventions {
 				compile.setSourceCompatibility(SOURCE_AND_TARGET_COMPATIBILITY);
 				compile.setTargetCompatibility(SOURCE_AND_TARGET_COMPATIBILITY);
 			}
-			else if (buildingWithJava8(project)) {
+			else if (buildingWithJava17(project)) {
 				args.addAll(Arrays.asList("-Werror", "-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:rawtypes",
 						"-Xlint:varargs"));
 			}
 		});
 	}
 
-	private boolean buildingWithJava8(Project project) {
-		return !project.hasProperty("toolchainVersion") && JavaVersion.current() == JavaVersion.VERSION_1_8;
+	private boolean buildingWithJava17(Project project) {
+		return !project.hasProperty("toolchainVersion") && JavaVersion.current() == JavaVersion.VERSION_17;
 	}
 
 	private void configureSpringJavaFormat(Project project) {
 		project.getPlugins().apply(SpringJavaFormatPlugin.class);
-		project.getTasks().withType(FormatTask.class, (formatTask) -> formatTask.setEncoding("UTF-8"));
+		project.getTasks().withType(Format.class, (Format) -> Format.setEncoding("UTF-8"));
 		project.getPlugins().apply(CheckstylePlugin.class);
 		CheckstyleExtension checkstyle = project.getExtensions().getByType(CheckstyleExtension.class);
-		checkstyle.setToolVersion("8.29");
+		checkstyle.setToolVersion("8.45.1");
 		checkstyle.getConfigDirectory().set(project.getRootProject().file("src/checkstyle"));
 		String version = SpringJavaFormatPlugin.class.getPackage().getImplementationVersion();
 		DependencySet checkstyleDependencies = project.getConfigurations().getByName("checkstyle").getDependencies();
@@ -237,6 +248,28 @@ class JavaConventions {
 
 	private void configureToolchain(Project project) {
 		project.getPlugins().apply(ToolchainPlugin.class);
+	}
+
+	private void configureProhibitedDependencyChecks(Project project) {
+		SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
+		sourceSets.all((sourceSet) -> createProhibitedDependenciesChecks(project,
+				sourceSet.getCompileClasspathConfigurationName(), sourceSet.getRuntimeClasspathConfigurationName()));
+	}
+
+	private void createProhibitedDependenciesChecks(Project project, String... configurationNames) {
+		ConfigurationContainer configurations = project.getConfigurations();
+		for (String configurationName : configurationNames) {
+			Configuration configuration = configurations.getByName(configurationName);
+			createProhibitedDependenciesCheck(configuration, project);
+		}
+	}
+
+	private void createProhibitedDependenciesCheck(Configuration classpath, Project project) {
+		CheckClasspathForProhibitedDependencies checkClasspathForProhibitedDependencies = project.getTasks().create(
+				"check" + StringUtils.capitalize(classpath.getName() + "ForProhibitedDependencies"),
+				CheckClasspathForProhibitedDependencies.class);
+		checkClasspathForProhibitedDependencies.setClasspath(classpath);
+		project.getTasks().getByName(JavaBasePlugin.CHECK_TASK_NAME).dependsOn(checkClasspathForProhibitedDependencies);
 	}
 
 }

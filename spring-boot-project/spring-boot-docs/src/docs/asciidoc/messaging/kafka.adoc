@@ -25,10 +25,7 @@ See {spring-boot-autoconfigure-module-code}/kafka/KafkaProperties.java[`KafkaPro
 === Sending a Message
 Spring's `KafkaTemplate` is auto-configured, and you can autowire it directly in your own beans, as shown in the following example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/messaging/kafka/sending/MyBean.java[]
-----
+include::code:MyBean[]
 
 NOTE: If the property configprop:spring.kafka.producer.transaction-id-prefix[] is defined, a `KafkaTransactionManager` is automatically configured.
 Also, if a `RecordMessageConverter` bean is defined, it is automatically associated to the auto-configured `KafkaTemplate`.
@@ -42,13 +39,10 @@ If no `KafkaListenerContainerFactory` has been defined, a default one is automat
 
 The following component creates a listener endpoint on the `someTopic` topic:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/messaging/kafka/receiving/MyBean.java[]
-----
+include::code:MyBean[]
 
 If a `KafkaTransactionManager` bean is defined, it is automatically associated to the container factory.
-Similarly, if a `RecordFilterStrategy`, `ErrorHandler`, `CommonErrorHandler`, `AfterRollbackProcessor` or `ConsumerAwareRebalanceListener` bean is defined, it is automatically associated to the default factory.
+Similarly, if a `RecordFilterStrategy`, `CommonErrorHandler`, `AfterRollbackProcessor` or `ConsumerAwareRebalanceListener` bean is defined, it is automatically associated to the default factory.
 
 Depending on the listener type, a `RecordMessageConverter` or `BatchMessageConverter` bean is associated to the default factory.
 If only a `RecordMessageConverter` bean is present for a batch listener, it is wrapped in a `BatchMessageConverter`.
@@ -60,32 +54,29 @@ TIP: A custom `ChainedKafkaTransactionManager` must be marked `@Primary` as it u
 [[messaging.kafka.streams]]
 === Kafka Streams
 Spring for Apache Kafka provides a factory bean to create a `StreamsBuilder` object and manage the lifecycle of its streams.
-Spring Boot auto-configures the required `KafkaStreamsConfiguration` bean as long as `kafka-streams` is on the classpath and Kafka Streams is enabled via the `@EnableKafkaStreams` annotation.
+Spring Boot auto-configures the required `KafkaStreamsConfiguration` bean as long as `kafka-streams` is on the classpath and Kafka Streams is enabled by the `@EnableKafkaStreams` annotation.
 
 Enabling Kafka Streams means that the application id and bootstrap servers must be set.
 The former can be configured using `spring.kafka.streams.application-id`, defaulting to `spring.application.name` if not set.
 The latter can be set globally or specifically overridden only for streams.
 
 Several additional properties are available using dedicated properties; other arbitrary Kafka properties can be set using the `spring.kafka.streams.properties` namespace.
-See also <<features#messaging.kafka.additional-properties>> for more information.
+See also <<messaging#messaging.kafka.additional-properties>> for more information.
 
 To use the factory bean, wire `StreamsBuilder` into your `@Bean` as shown in the following example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/messaging/kafka/streams/MyKafkaStreamsConfiguration.java[]
-----
+include::code:MyKafkaStreamsConfiguration[]
 
-By default, the streams managed by the `StreamBuilder` object it creates are started automatically.
+By default, the streams managed by the `StreamBuilder` object are started automatically.
 You can customize this behavior using the configprop:spring.kafka.streams.auto-startup[] property.
 
 
 
 [[messaging.kafka.additional-properties]]
 === Additional Kafka Properties
-The properties supported by auto configuration are shown in <<application-properties#application-properties>>.
+The properties supported by auto configuration are shown in the <<application-properties#appendix.application-properties.integration, "`Integration Properties`">> section of the Appendix.
 Note that, for the most part, these properties (hyphenated or camelCase) map directly to the Apache Kafka dotted properties.
-Refer to the Apache Kafka documentation for details.
+See the Apache Kafka documentation for details.
 
 The first few of these properties apply to all components (producers, consumers, admins, and streams) but can be specified at the component level if you wish to use different values.
 Apache Kafka designates properties with an importance of HIGH, MEDIUM, or LOW.
@@ -156,17 +147,11 @@ There are several ways to do that:
 
 * Provide a system property to map embedded broker addresses into configprop:spring.kafka.bootstrap-servers[] in the test class:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/messaging/kafka/embedded/property/MyTest.java[tag=*]
-----
+include::code:property/MyTest[tag=*]
 
 * Configure a property name on the `@EmbeddedKafka` annotation:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/features/messaging/kafka/embedded/annotation/MyTest.java[]
-----
+include::code:annotation/MyTest[]
 
 * Use a placeholder in configuration properties:
 

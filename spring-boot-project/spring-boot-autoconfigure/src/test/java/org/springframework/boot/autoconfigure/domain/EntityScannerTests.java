@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@ package org.springframework.boot.autoconfigure.domain;
 import java.util.Collections;
 import java.util.Set;
 
-import javax.persistence.Embeddable;
-import javax.persistence.Entity;
-
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.Entity;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -41,9 +40,8 @@ import org.springframework.core.type.filter.AnnotationTypeFilter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Tests for {@link EntityScanner}.
@@ -112,10 +110,10 @@ class EntityScannerTests {
 		TestEntityScanner scanner = new TestEntityScanner(context, candidateComponentProvider);
 		scanner.scan(Entity.class);
 		ArgumentCaptor<AnnotationTypeFilter> annotationTypeFilter = ArgumentCaptor.forClass(AnnotationTypeFilter.class);
-		verify(candidateComponentProvider).addIncludeFilter(annotationTypeFilter.capture());
-		verify(candidateComponentProvider)
+		then(candidateComponentProvider).should().addIncludeFilter(annotationTypeFilter.capture());
+		then(candidateComponentProvider).should()
 				.findCandidateComponents("org.springframework.boot.autoconfigure.domain.scan");
-		verifyNoMoreInteractions(candidateComponentProvider);
+		then(candidateComponentProvider).shouldHaveNoMoreInteractions();
 		assertThat(annotationTypeFilter.getValue().getAnnotationType()).isEqualTo(Entity.class);
 	}
 

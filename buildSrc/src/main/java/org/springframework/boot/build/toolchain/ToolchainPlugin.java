@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@ import java.util.List;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginExtension;
-import org.gradle.api.tasks.compile.JavaCompile;
-import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.testing.Test;
 import org.gradle.jvm.toolchain.JavaLanguageVersion;
 import org.gradle.jvm.toolchain.JavaToolchainSpec;
@@ -67,14 +65,11 @@ public class ToolchainPlugin implements Plugin<Project> {
 	}
 
 	private void disableToolchainTasks(Project project) {
-		project.getTasks().withType(JavaCompile.class, (task) -> task.setEnabled(false));
-		project.getTasks().withType(Javadoc.class, (task) -> task.setEnabled(false));
 		project.getTasks().withType(Test.class, (task) -> task.setEnabled(false));
 	}
 
 	private void configureTestToolchain(Project project, ToolchainExtension toolchain) {
 		List<String> jvmArgs = new ArrayList<>();
-		jvmArgs.add("--illegal-access=warn");
 		jvmArgs.addAll(toolchain.getTestJvmArgs().getOrElse(Collections.emptyList()));
 		project.getTasks().withType(Test.class, (test) -> test.jvmArgs(jvmArgs));
 	}

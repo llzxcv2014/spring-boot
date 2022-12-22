@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,8 @@ import org.springframework.boot.configurationprocessor.metadata.ItemMetadata;
  * @author Jonas Keßler
  * @since 1.2.0
  */
-@SupportedAnnotationTypes({ ConfigurationMetadataAnnotationProcessor.CONFIGURATION_PROPERTIES_ANNOTATION,
+@SupportedAnnotationTypes({ ConfigurationMetadataAnnotationProcessor.AUTO_CONFIGURATION_ANNOTATION,
+		ConfigurationMetadataAnnotationProcessor.CONFIGURATION_PROPERTIES_ANNOTATION,
 		ConfigurationMetadataAnnotationProcessor.CONTROLLER_ENDPOINT_ANNOTATION,
 		ConfigurationMetadataAnnotationProcessor.ENDPOINT_ANNOTATION,
 		ConfigurationMetadataAnnotationProcessor.JMX_ENDPOINT_ANNOTATION,
@@ -77,7 +78,9 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 
 	static final String DEPRECATED_CONFIGURATION_PROPERTY_ANNOTATION = "org.springframework.boot.context.properties.DeprecatedConfigurationProperty";
 
-	static final String CONSTRUCTOR_BINDING_ANNOTATION = "org.springframework.boot.context.properties.ConstructorBinding";
+	static final String CONSTRUCTOR_BINDING_ANNOTATION = "org.springframework.boot.context.properties.bind.ConstructorBinding";
+
+	static final String AUTOWIRED_ANNOTATION = "org.springframework.beans.factory.annotation.Autowired";
 
 	static final String DEFAULT_VALUE_ANNOTATION = "org.springframework.boot.context.properties.bind.DefaultValue";
 
@@ -96,6 +99,8 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 	static final String READ_OPERATION_ANNOTATION = "org.springframework.boot.actuate.endpoint.annotation.ReadOperation";
 
 	static final String NAME_ANNOTATION = "org.springframework.boot.context.properties.bind.Name";
+
+	static final String AUTO_CONFIGURATION_ANNOTATION = "org.springframework.boot.autoconfigure.AutoConfiguration";
 
 	private static final Set<String> SUPPORTED_OPTIONS = Collections
 			.unmodifiableSet(Collections.singleton(ADDITIONAL_METADATA_LOCATIONS_OPTION));
@@ -120,6 +125,10 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 
 	protected String constructorBindingAnnotation() {
 		return CONSTRUCTOR_BINDING_ANNOTATION;
+	}
+
+	protected String autowiredAnnotation() {
+		return AUTOWIRED_ANNOTATION;
 	}
 
 	protected String defaultValueAnnotation() {
@@ -156,7 +165,7 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 		this.metadataCollector = new MetadataCollector(env, this.metadataStore.readMetadata());
 		this.metadataEnv = new MetadataGenerationEnvironment(env, configurationPropertiesAnnotation(),
 				nestedConfigurationPropertyAnnotation(), deprecatedConfigurationPropertyAnnotation(),
-				constructorBindingAnnotation(), defaultValueAnnotation(), endpointAnnotations(),
+				constructorBindingAnnotation(), autowiredAnnotation(), defaultValueAnnotation(), endpointAnnotations(),
 				readOperationAnnotation(), nameAnnotation());
 	}
 
@@ -177,7 +186,7 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 		}
 		if (roundEnv.processingOver()) {
 			try {
-				writeMetaData();
+				writeMetadata();
 			}
 			catch (Exception ex) {
 				throw new IllegalStateException("Failed to write metadata", ex);
@@ -203,11 +212,11 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 			AnnotationMirror annotation = this.metadataEnv.getConfigurationPropertiesAnnotation(element);
 			if (annotation != null) {
 				String prefix = getPrefix(annotation);
-				if (element instanceof TypeElement) {
-					processAnnotatedTypeElement(prefix, (TypeElement) element, new Stack<>());
+				if (element instanceof TypeElement typeElement) {
+					processAnnotatedTypeElement(prefix, typeElement, new Stack<>());
 				}
-				else if (element instanceof ExecutableElement) {
-					processExecutableElement(prefix, (ExecutableElement) element, new Stack<>());
+				else if (element instanceof ExecutableElement executableElement) {
+					processExecutableElement(prefix, executableElement, new Stack<>());
 				}
 			}
 		}
@@ -226,18 +235,18 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 		if ((!element.getModifiers().contains(Modifier.PRIVATE))
 				&& (TypeKind.VOID != element.getReturnType().getKind())) {
 			Element returns = this.processingEnv.getTypeUtils().asElement(element.getReturnType());
-			if (returns instanceof TypeElement) {
+			if (returns instanceof TypeElement typeElement) {
 				ItemMetadata group = ItemMetadata.newGroup(prefix,
 						this.metadataEnv.getTypeUtils().getQualifiedName(returns),
 						this.metadataEnv.getTypeUtils().getQualifiedName(element.getEnclosingElement()),
 						element.toString());
 				if (this.metadataCollector.hasSimilarGroup(group)) {
 					this.processingEnv.getMessager().printMessage(Kind.ERROR,
-							"Duplicate `@ConfigurationProperties` definition for prefix '" + prefix + "'", element);
+							"Duplicate @ConfigurationProperties definition for prefix '" + prefix + "'", element);
 				}
 				else {
 					this.metadataCollector.add(group);
-					processTypeElement(prefix, (TypeElement) returns, element, seen);
+					processTypeElement(prefix, typeElement, element, seen);
 				}
 			}
 		}
@@ -264,8 +273,8 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 		try {
 			String annotationName = this.metadataEnv.getTypeUtils().getQualifiedName(annotations.get(0));
 			AnnotationMirror annotation = this.metadataEnv.getAnnotation(element, annotationName);
-			if (element instanceof TypeElement) {
-				processEndpoint(annotation, (TypeElement) element);
+			if (element instanceof TypeElement typeElement) {
+				processEndpoint(annotation, typeElement);
 			}
 		}
 		catch (Exception ex) {
@@ -324,7 +333,7 @@ public class ConfigurationMetadataAnnotationProcessor extends AbstractProcessor 
 		return null;
 	}
 
-	protected ConfigurationMetadata writeMetaData() throws Exception {
+	protected ConfigurationMetadata writeMetadata() throws Exception {
 		ConfigurationMetadata metadata = this.metadataCollector.getMetadata();
 		metadata = mergeAdditionalMetadata(metadata);
 		if (!metadata.getItems().isEmpty()) {

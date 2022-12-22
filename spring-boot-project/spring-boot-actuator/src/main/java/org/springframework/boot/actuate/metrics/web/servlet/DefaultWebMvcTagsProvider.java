@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,21 @@ package org.springframework.boot.actuate.metrics.web.servlet;
 import java.util.Collections;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Default implementation of {@link WebMvcTagsProvider}.
  *
  * @author Jon Schneider
  * @since 2.0.0
+ * @deprecated since 3.0.0 for removal in 3.2.0 in favor of
+ * {@link org.springframework.http.server.observation.ServerRequestObservationConvention}
  */
+@Deprecated(since = "3.0.0", forRemoval = true)
+@SuppressWarnings("removal")
 public class DefaultWebMvcTagsProvider implements WebMvcTagsProvider {
 
 	private final boolean ignoreTrailingSlash;

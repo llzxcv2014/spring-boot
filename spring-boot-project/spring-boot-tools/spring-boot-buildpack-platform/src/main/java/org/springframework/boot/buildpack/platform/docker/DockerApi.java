@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.http.client.utils.URIBuilder;
 
-import org.springframework.boot.buildpack.platform.docker.configuration.DockerConfiguration;
+import org.springframework.boot.buildpack.platform.docker.configuration.DockerHost;
 import org.springframework.boot.buildpack.platform.docker.transport.HttpTransport;
 import org.springframework.boot.buildpack.platform.docker.transport.HttpTransport.Response;
 import org.springframework.boot.buildpack.platform.docker.type.ContainerConfig;
@@ -52,6 +52,7 @@ import org.springframework.util.StringUtils;
  *
  * @author Phillip Webb
  * @author Scott Frederick
+ * @author Rafael Ceccone
  * @since 2.3.0
  */
 public class DockerApi {
@@ -74,16 +75,16 @@ public class DockerApi {
 	 * Create a new {@link DockerApi} instance.
 	 */
 	public DockerApi() {
-		this(new DockerConfiguration());
+		this(HttpTransport.create(null));
 	}
 
 	/**
 	 * Create a new {@link DockerApi} instance.
-	 * @param dockerConfiguration the docker configuration
+	 * @param dockerHost the Docker daemon host information
 	 * @since 2.4.0
 	 */
-	public DockerApi(DockerConfiguration dockerConfiguration) {
-		this(HttpTransport.create((dockerConfiguration != null) ? dockerConfiguration.getHost() : null));
+	public DockerApi(DockerHost dockerHost) {
+		this(HttpTransport.create(dockerHost));
 	}
 
 	/**
@@ -186,7 +187,7 @@ public class DockerApi {
 						listener.onUpdate(event);
 					});
 				}
-				return inspect(reference.withDigest(digestCapture.getCapturedDigest()));
+				return inspect(reference);
 			}
 			finally {
 				listener.onFinish();
@@ -283,7 +284,7 @@ public class DockerApi {
 			Assert.notNull(reference, "Reference must not be null");
 			Collection<String> params = force ? FORCE_PARAMS : Collections.emptySet();
 			URI uri = buildUrl("/images/" + reference, params);
-			http().delete(uri);
+			http().delete(uri).close();
 		}
 
 		/**
@@ -298,6 +299,13 @@ public class DockerApi {
 			try (Response response = http().get(imageUri)) {
 				return Image.of(response.getContent());
 			}
+		}
+
+		public void tag(ImageReference sourceReference, ImageReference targetReference) throws IOException {
+			Assert.notNull(sourceReference, "SourceReference must not be null");
+			Assert.notNull(targetReference, "TargetReference must not be null");
+			URI uri = buildUrl("/images/" + sourceReference + "/tag", "repo", targetReference.toString());
+			http().post(uri).close();
 		}
 
 	}
@@ -348,7 +356,7 @@ public class DockerApi {
 		public void start(ContainerReference reference) throws IOException {
 			Assert.notNull(reference, "Reference must not be null");
 			URI uri = buildUrl("/containers/" + reference + "/start");
-			http().post(uri);
+			http().post(uri).close();
 		}
 
 		/**
@@ -396,7 +404,7 @@ public class DockerApi {
 			Assert.notNull(reference, "Reference must not be null");
 			Collection<String> params = force ? FORCE_PARAMS : Collections.emptySet();
 			URI uri = buildUrl("/containers/" + reference, params);
-			http().delete(uri);
+			http().delete(uri).close();
 		}
 
 	}
@@ -419,7 +427,7 @@ public class DockerApi {
 			Assert.notNull(name, "Name must not be null");
 			Collection<String> params = force ? FORCE_PARAMS : Collections.emptySet();
 			URI uri = buildUrl("/volumes/" + name, params);
-			http().delete(uri);
+			http().delete(uri).close();
 		}
 
 	}
@@ -441,11 +449,6 @@ public class DockerApi {
 				Assert.state(this.digest == null || this.digest.equals(digest), "Different digests IDs provided");
 				this.digest = digest;
 			}
-		}
-
-		String getCapturedDigest() {
-			Assert.hasText(this.digest, "No digest found");
-			return this.digest;
 		}
 
 	}

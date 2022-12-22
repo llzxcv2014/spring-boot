@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,25 +17,28 @@
 package org.springframework.boot.autoconfigure.thymeleaf;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
 
-import nz.net.ultraq.thymeleaf.LayoutDialect;
-import nz.net.ultraq.thymeleaf.decorators.strategies.GroupingRespectLayoutTitleStrategy;
+import nz.net.ultraq.thymeleaf.layoutdialect.LayoutDialect;
+import nz.net.ultraq.thymeleaf.layoutdialect.decorators.strategies.GroupingStrategy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
-import org.thymeleaf.context.IContext;
-import org.thymeleaf.extras.springsecurity5.util.SpringSecurityContextUtils;
-import org.thymeleaf.spring5.ISpringWebFluxTemplateEngine;
-import org.thymeleaf.spring5.SpringWebFluxTemplateEngine;
-import org.thymeleaf.spring5.context.webflux.SpringWebFluxContext;
-import org.thymeleaf.spring5.templateresolver.SpringResourceTemplateResolver;
-import org.thymeleaf.spring5.view.reactive.ThymeleafReactiveViewResolver;
+import org.thymeleaf.context.WebContext;
+import org.thymeleaf.extras.springsecurity6.dialect.SpringSecurityDialect;
+import org.thymeleaf.extras.springsecurity6.util.SpringSecurityContextUtils;
+import org.thymeleaf.spring6.ISpringWebFluxTemplateEngine;
+import org.thymeleaf.spring6.SpringWebFluxTemplateEngine;
+import org.thymeleaf.spring6.templateresolver.SpringResourceTemplateResolver;
+import org.thymeleaf.spring6.view.reactive.ThymeleafReactiveViewResolver;
+import org.thymeleaf.spring6.web.webflux.SpringWebFluxWebApplication;
 import org.thymeleaf.templateresolver.ITemplateResolver;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -88,10 +91,22 @@ class ThymeleafReactiveAutoConfigurationTests {
 	}
 
 	@Test
+	void defaultMediaTypes() {
+		this.contextRunner.run(
+				(context) -> assertThat(context.getBean(ThymeleafReactiveViewResolver.class).getSupportedMediaTypes())
+						.containsExactly(MediaType.TEXT_HTML, MediaType.APPLICATION_XHTML_XML,
+								MediaType.APPLICATION_XML, MediaType.TEXT_XML, MediaType.APPLICATION_RSS_XML,
+								MediaType.APPLICATION_ATOM_XML, new MediaType("application", "javascript"),
+								new MediaType("application", "ecmascript"), new MediaType("text", "javascript"),
+								new MediaType("text", "ecmascript"), MediaType.APPLICATION_JSON,
+								new MediaType("text", "css"), MediaType.TEXT_PLAIN, MediaType.TEXT_EVENT_STREAM));
+	}
+
+	@Test
 	void overrideMediaTypes() {
 		this.contextRunner.withPropertyValues("spring.thymeleaf.reactive.media-types:text/html,text/plain").run(
 				(context) -> assertThat(context.getBean(ThymeleafReactiveViewResolver.class).getSupportedMediaTypes())
-						.contains(MediaType.TEXT_HTML, MediaType.TEXT_PLAIN));
+						.containsExactly(MediaType.TEXT_HTML, MediaType.TEXT_PLAIN));
 	}
 
 	@Test
@@ -198,10 +213,17 @@ class ThymeleafReactiveAutoConfigurationTests {
 			MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
 			exchange.getAttributes().put(SpringSecurityContextUtils.SECURITY_CONTEXT_MODEL_ATTRIBUTE_NAME,
 					new SecurityContextImpl(new TestingAuthenticationToken("alice", "admin")));
-			IContext attrs = new SpringWebFluxContext(exchange);
+			WebContext attrs = new WebContext(SpringWebFluxWebApplication.buildApplication(null).buildExchange(exchange,
+					Locale.US, MediaType.TEXT_HTML, StandardCharsets.UTF_8));
 			String result = engine.process("security-dialect", attrs);
 			assertThat(result).isEqualTo("<html><body><div>alice</div></body></html>" + System.lineSeparator());
 		});
+	}
+
+	@Test
+	void securityDialectAutoConfigurationBacksOffWithoutSpringSecurity() {
+		this.contextRunner.withClassLoader(new FilteredClassLoader("org.springframework.security"))
+				.run((context) -> assertThat(context).doesNotHaveBean(SpringSecurityDialect.class));
 	}
 
 	@Test
@@ -219,7 +241,7 @@ class ThymeleafReactiveAutoConfigurationTests {
 		this.contextRunner.withUserConfiguration(LayoutDialectConfiguration.class)
 				.run((context) -> assertThat(
 						ReflectionTestUtils.getField(context.getBean(LayoutDialect.class), "sortingStrategy"))
-								.isInstanceOf(GroupingRespectLayoutTitleStrategy.class));
+								.isInstanceOf(GroupingStrategy.class));
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -227,7 +249,7 @@ class ThymeleafReactiveAutoConfigurationTests {
 
 		@Bean
 		LayoutDialect layoutDialect() {
-			return new LayoutDialect(new GroupingRespectLayoutTitleStrategy());
+			return new LayoutDialect(new GroupingStrategy());
 		}
 
 	}

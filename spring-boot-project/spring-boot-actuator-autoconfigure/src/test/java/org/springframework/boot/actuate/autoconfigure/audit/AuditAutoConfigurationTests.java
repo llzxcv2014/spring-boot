@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.access.event.AbstractAuthorizationEvent;
 import org.springframework.security.authentication.event.AbstractAuthenticationEvent;
+import org.springframework.security.authorization.event.AuthorizationEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -149,7 +149,7 @@ class AuditAutoConfigurationTests {
 		}
 
 		@Override
-		public void onApplicationEvent(AbstractAuthorizationEvent event) {
+		public void onApplicationEvent(AuthorizationEvent event) {
 		}
 
 	}

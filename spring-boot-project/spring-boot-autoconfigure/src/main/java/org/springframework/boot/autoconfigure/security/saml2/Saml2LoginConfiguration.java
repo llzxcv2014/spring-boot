@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,12 @@ import org.springframework.boot.autoconfigure.security.ConditionalOnDefaultWebSe
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * {@link WebSecurityConfigurerAdapter} configuration for Spring Security's relying party
- * SAML support.
+ * {@link SecurityFilterChain} configuration for Spring Security's relying party SAML
+ * support.
  *
  * @author Madhura Bhave
  */
@@ -38,7 +37,8 @@ class Saml2LoginConfiguration {
 
 	@Bean
 	SecurityFilterChain samlSecurityFilterChain(HttpSecurity http) throws Exception {
-		http.authorizeRequests((requests) -> requests.anyRequest().authenticated()).saml2Login();
+		http.authorizeHttpRequests((requests) -> requests.anyRequest().authenticated()).saml2Login();
+		http.saml2Logout();
 		return http.build();
 	}
 

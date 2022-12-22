@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 
 package org.springframework.boot.gradle.plugin;
 
+import java.util.concurrent.Callable;
+
 import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.artifacts.dsl.LazyPublishArtifact;
 import org.gradle.api.plugins.BasePlugin;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.plugins.WarPlugin;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
@@ -71,12 +73,12 @@ class WarPluginAction implements PluginApplicationAction {
 				.getByName(SpringBootPlugin.DEVELOPMENT_ONLY_CONFIGURATION_NAME);
 		Configuration productionRuntimeClasspath = project.getConfigurations()
 				.getByName(SpringBootPlugin.PRODUCTION_RUNTIME_CLASSPATH_CONFIGURATION_NAME);
-		FileCollection classpath = project.getConvention().getByType(SourceSetContainer.class)
+		Callable<FileCollection> classpath = () -> project.getExtensions().getByType(SourceSetContainer.class)
 				.getByName(SourceSet.MAIN_SOURCE_SET_NAME).getRuntimeClasspath()
 				.minus(providedRuntimeConfiguration(project)).minus((developmentOnly.minus(productionRuntimeClasspath)))
 				.filter(new JarTypeFileSpec());
-		TaskProvider<ResolveMainClassName> resolveMainClassName = ResolveMainClassName
-				.registerForTask(SpringBootPlugin.BOOT_WAR_TASK_NAME, project, classpath);
+		TaskProvider<ResolveMainClassName> resolveMainClassName = project.getTasks()
+				.named(SpringBootPlugin.RESOLVE_MAIN_CLASS_NAME_TASK_NAME, ResolveMainClassName.class);
 		TaskProvider<BootWar> bootWarProvider = project.getTasks().register(SpringBootPlugin.BOOT_WAR_TASK_NAME,
 				BootWar.class, (bootWar) -> {
 					bootWar.setGroup(BasePlugin.BUILD_GROUP);
@@ -89,8 +91,10 @@ class WarPluginAction implements PluginApplicationAction {
 					bootWar.getMainClass()
 							.convention(resolveMainClassName.flatMap((resolver) -> manifestStartClass.isPresent()
 									? manifestStartClass : resolveMainClassName.get().readMainClassName()));
+					bootWar.getTargetJavaVersion()
+							.set(project.provider(() -> javaPluginExtension(project).getTargetCompatibility()));
 				});
-		bootWarProvider.map((bootWar) -> bootWar.getClasspath());
+		bootWarProvider.map(War::getClasspath);
 		return bootWarProvider;
 	}
 
@@ -105,8 +109,11 @@ class WarPluginAction implements PluginApplicationAction {
 	}
 
 	private void configureArtifactPublication(TaskProvider<BootWar> bootWar) {
-		LazyPublishArtifact artifact = new LazyPublishArtifact(bootWar);
-		this.singlePublishedArtifact.addCandidate(artifact);
+		this.singlePublishedArtifact.addWarCandidate(bootWar);
+	}
+
+	private JavaPluginExtension javaPluginExtension(Project project) {
+		return project.getExtensions().getByType(JavaPluginExtension.class);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Andy Wilkinson
  */
+@SuppressWarnings("removal")
+@Deprecated(since = "3.0.0", forRemoval = true)
 class DefaultWebFluxTagsProviderTests {
 
 	@Test
@@ -71,7 +73,7 @@ class DefaultWebFluxTagsProviderTests {
 
 		@Override
 		public Iterable<Tag> httpRequestTags(ServerWebExchange exchange, Throwable ex) {
-			return this.tagNames.stream().map((name) -> Tag.of(name, "value")).collect(Collectors.toList());
+			return this.tagNames.stream().map((name) -> Tag.of(name, "value")).toList();
 		}
 
 	}

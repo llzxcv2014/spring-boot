@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,10 @@
 
 package org.springframework.boot.autoconfigure.amqp;
 
+import java.time.Duration;
+
+import com.rabbitmq.stream.BackOffDelayPolicy;
+import com.rabbitmq.stream.Codec;
 import com.rabbitmq.stream.Environment;
 import com.rabbitmq.stream.EnvironmentBuilder;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -26,24 +30,30 @@ import org.springframework.amqp.rabbit.config.ContainerCustomizer;
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.listener.RabbitListenerEndpointRegistry;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.annotation.Order;
 import org.springframework.rabbit.stream.config.StreamRabbitListenerContainerFactory;
 import org.springframework.rabbit.stream.listener.ConsumerCustomizer;
 import org.springframework.rabbit.stream.listener.StreamListenerContainer;
+import org.springframework.rabbit.stream.producer.ProducerCustomizer;
+import org.springframework.rabbit.stream.producer.RabbitStreamTemplate;
+import org.springframework.rabbit.stream.support.converter.StreamMessageConverter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 /**
  * Tests for {@link RabbitStreamConfiguration}.
  *
  * @author Gary Russell
  * @author Andy Wilkinson
+ * @author Eddú Meléndez
  */
 class RabbitStreamConfigurationTests {
 
@@ -61,7 +71,7 @@ class RabbitStreamConfigurationTests {
 					assertThat(listenerContainer).extracting("consumerCustomizer").isNotNull();
 					assertThat(context.getBean(StreamRabbitListenerContainerFactory.class))
 							.extracting("nativeListener", InstanceOfAssertFactories.BOOLEAN).isFalse();
-					verify(context.getBean(ContainerCustomizer.class)).configure(listenerContainer);
+					then(context.getBean(ContainerCustomizer.class)).should().configure(listenerContainer);
 					assertThat(context).hasSingleBean(Environment.class);
 				});
 	}
@@ -76,7 +86,12 @@ class RabbitStreamConfigurationTests {
 	}
 
 	@Test
-	void whenCustomEnvironmenIsDefinedThenAutoConfiguredEnvironmentBacksOff() {
+	void environmentIsAutoConfiguredByDefault() {
+		this.contextRunner.run((context) -> assertThat(context).hasSingleBean(Environment.class));
+	}
+
+	@Test
+	void whenCustomEnvironmentIsDefinedThenAutoConfiguredEnvironmentBacksOff() {
 		this.contextRunner.withUserConfiguration(CustomEnvironmentConfiguration.class).run((context) -> {
 			assertThat(context).hasSingleBean(Environment.class);
 			assertThat(context.getBean(Environment.class))
@@ -85,7 +100,7 @@ class RabbitStreamConfigurationTests {
 	}
 
 	@Test
-	void whenCustomMessageListenerContainerIsDefinedThenAutoConfiguredContainerBacksOff() {
+	void whenCustomMessageListenerContainerFactoryIsDefinedThenAutoConfiguredContainerFactoryBacksOff() {
 		this.contextRunner.withUserConfiguration(CustomMessageListenerContainerFactoryConfiguration.class)
 				.run((context) -> {
 					assertThat(context).hasSingleBean(RabbitListenerContainerFactory.class);
@@ -99,12 +114,12 @@ class RabbitStreamConfigurationTests {
 		EnvironmentBuilder builder = mock(EnvironmentBuilder.class);
 		RabbitProperties properties = new RabbitProperties();
 		RabbitStreamConfiguration.configure(builder, properties);
-		verify(builder).port(5552);
-		verify(builder).host("localhost");
-		verify(builder).lazyInitialization(true);
-		verify(builder).username("guest");
-		verify(builder).password("guest");
-		verifyNoMoreInteractions(builder);
+		then(builder).should().port(5552);
+		then(builder).should().host("localhost");
+		then(builder).should().lazyInitialization(true);
+		then(builder).should().username("guest");
+		then(builder).should().password("guest");
+		then(builder).shouldHaveNoMoreInteractions();
 	}
 
 	@Test
@@ -113,7 +128,7 @@ class RabbitStreamConfigurationTests {
 		RabbitProperties properties = new RabbitProperties();
 		properties.getStream().setPort(5553);
 		RabbitStreamConfiguration.configure(builder, properties);
-		verify(builder).port(5553);
+		then(builder).should().port(5553);
 	}
 
 	@Test
@@ -122,7 +137,7 @@ class RabbitStreamConfigurationTests {
 		RabbitProperties properties = new RabbitProperties();
 		properties.getStream().setHost("stream.rabbit.example.com");
 		RabbitStreamConfiguration.configure(builder, properties);
-		verify(builder).host("stream.rabbit.example.com");
+		then(builder).should().host("stream.rabbit.example.com");
 	}
 
 	@Test
@@ -132,8 +147,8 @@ class RabbitStreamConfigurationTests {
 		properties.setUsername("alice");
 		properties.setPassword("secret");
 		RabbitStreamConfiguration.configure(builder, properties);
-		verify(builder).username("alice");
-		verify(builder).password("secret");
+		then(builder).should().username("alice");
+		then(builder).should().password("secret");
 	}
 
 	@Test
@@ -145,8 +160,69 @@ class RabbitStreamConfigurationTests {
 		properties.getStream().setUsername("bob");
 		properties.getStream().setPassword("confidential");
 		RabbitStreamConfiguration.configure(builder, properties);
-		verify(builder).username("bob");
-		verify(builder).password("confidential");
+		then(builder).should().username("bob");
+		then(builder).should().password("confidential");
+	}
+
+	@Test
+	void testDefaultRabbitStreamTemplateConfiguration() {
+		this.contextRunner.withPropertyValues("spring.rabbitmq.stream.name:stream-test").run((context) -> {
+			assertThat(context).hasSingleBean(RabbitStreamTemplate.class);
+			assertThat(context.getBean(RabbitStreamTemplate.class)).hasFieldOrPropertyWithValue("streamName",
+					"stream-test");
+		});
+	}
+
+	@Test
+	void testDefaultRabbitStreamTemplateConfigurationWithoutStreamName() {
+		this.contextRunner.withPropertyValues("spring.rabbitmq.listener.type:stream")
+				.run((context) -> assertThat(context).doesNotHaveBean(RabbitStreamTemplate.class));
+	}
+
+	@Test
+	void testRabbitStreamTemplateConfigurationWithCustomMessageConverter() {
+		this.contextRunner.withUserConfiguration(MessageConvertersConfiguration.class)
+				.withPropertyValues("spring.rabbitmq.stream.name:stream-test").run((context) -> {
+					assertThat(context).hasSingleBean(RabbitStreamTemplate.class);
+					RabbitStreamTemplate streamTemplate = context.getBean(RabbitStreamTemplate.class);
+					assertThat(streamTemplate).hasFieldOrPropertyWithValue("streamName", "stream-test");
+					assertThat(streamTemplate).extracting("messageConverter")
+							.isSameAs(context.getBean(MessageConverter.class));
+				});
+	}
+
+	@Test
+	void testRabbitStreamTemplateConfigurationWithCustomStreamMessageConverter() {
+		this.contextRunner
+				.withBean("myStreamMessageConverter", StreamMessageConverter.class,
+						() -> mock(StreamMessageConverter.class))
+				.withPropertyValues("spring.rabbitmq.stream.name:stream-test").run((context) -> {
+					assertThat(context).hasSingleBean(RabbitStreamTemplate.class);
+					assertThat(context.getBean(RabbitStreamTemplate.class)).extracting("messageConverter")
+							.isSameAs(context.getBean("myStreamMessageConverter"));
+				});
+	}
+
+	@Test
+	void testRabbitStreamTemplateConfigurationWithCustomProducerCustomizer() {
+		this.contextRunner
+				.withBean("myProducerCustomizer", ProducerCustomizer.class, () -> mock(ProducerCustomizer.class))
+				.withPropertyValues("spring.rabbitmq.stream.name:stream-test").run((context) -> {
+					assertThat(context).hasSingleBean(RabbitStreamTemplate.class);
+					assertThat(context.getBean(RabbitStreamTemplate.class)).extracting("producerCustomizer")
+							.isSameAs(context.getBean("myProducerCustomizer"));
+				});
+	}
+
+	@Test
+	void environmentCreatedByBuilderCanBeCustomized() {
+		this.contextRunner.withUserConfiguration(EnvironmentBuilderCustomizers.class).run((context) -> {
+			Environment environment = context.getBean(Environment.class);
+			assertThat(environment).extracting("codec")
+					.isEqualTo(context.getBean(EnvironmentBuilderCustomizers.class).codec);
+			assertThat(environment).extracting("recoveryBackOffDelayPolicy")
+					.isEqualTo(context.getBean(EnvironmentBuilderCustomizers.class).recoveryBackOffDelayPolicy);
+		});
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -192,6 +268,44 @@ class RabbitStreamConfigurationTests {
 		@SuppressWarnings("unchecked")
 		RabbitListenerContainerFactory<MessageListenerContainer> rabbitListenerContainerFactory() {
 			return this.listenerContainerFactory;
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class MessageConvertersConfiguration {
+
+		@Bean
+		@Primary
+		MessageConverter myMessageConverter() {
+			return mock(MessageConverter.class);
+		}
+
+		@Bean
+		MessageConverter anotherMessageConverter() {
+			return mock(MessageConverter.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class EnvironmentBuilderCustomizers {
+
+		private final Codec codec = mock(Codec.class);
+
+		private final BackOffDelayPolicy recoveryBackOffDelayPolicy = BackOffDelayPolicy.fixed(Duration.ofSeconds(5));
+
+		@Bean
+		@Order(1)
+		EnvironmentBuilderCustomizer customizerA() {
+			return (builder) -> builder.codec(this.codec);
+		}
+
+		@Bean
+		@Order(0)
+		EnvironmentBuilderCustomizer customizerB() {
+			return (builder) -> builder.codec(mock(Codec.class))
+					.recoveryBackOffDelayPolicy(this.recoveryBackOffDelayPolicy);
 		}
 
 	}

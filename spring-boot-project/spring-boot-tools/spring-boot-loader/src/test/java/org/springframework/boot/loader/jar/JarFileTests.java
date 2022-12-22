@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,8 +64,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIOException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link JarFile}.
@@ -243,7 +243,7 @@ class JarFileTests {
 		RandomAccessDataFile randomAccessDataFile = spy(new RandomAccessDataFile(this.rootJarFile));
 		JarFile jarFile = new JarFile(randomAccessDataFile);
 		jarFile.close();
-		verify(randomAccessDataFile).close();
+		then(randomAccessDataFile).should().close();
 	}
 
 	@Test
@@ -294,9 +294,10 @@ class JarFileTests {
 	void getEntryUrlStream() throws Exception {
 		URL url = new URL(this.jarFile.getUrl(), "1.dat");
 		url.openConnection();
-		InputStream stream = url.openStream();
-		assertThat(stream.read()).isEqualTo(1);
-		assertThat(stream.read()).isEqualTo(-1);
+		try (InputStream stream = url.openStream()) {
+			assertThat(stream.read()).isEqualTo(1);
+			assertThat(stream.read()).isEqualTo(-1);
+		}
 	}
 
 	@Test
@@ -560,7 +561,7 @@ class JarFileTests {
 			assertThat(entry.getName()).isEqualTo("multi-release.dat");
 			InputStream inputStream = multiRelease.getInputStream(entry);
 			assertThat(inputStream.available()).isEqualTo(1);
-			assertThat(inputStream.read()).isEqualTo(getJavaVersion());
+			assertThat(inputStream.read()).isEqualTo(Runtime.version().feature());
 		}
 	}
 
@@ -730,16 +731,6 @@ class JarFileTests {
 
 	private void assertThatZipFileClosedIsThrownBy(ThrowingCallable throwingCallable) {
 		assertThatIllegalStateException().isThrownBy(throwingCallable).withMessage("zip file closed");
-	}
-
-	private int getJavaVersion() {
-		try {
-			Object runtimeVersion = Runtime.class.getMethod("version").invoke(null);
-			return (int) runtimeVersion.getClass().getMethod("major").invoke(runtimeVersion);
-		}
-		catch (Throwable ex) {
-			return 8;
-		}
 	}
 
 }

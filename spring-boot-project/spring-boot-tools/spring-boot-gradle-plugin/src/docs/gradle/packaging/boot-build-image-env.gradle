@@ -4,13 +4,13 @@ plugins {
 }
 
 // tag::env[]
-bootBuildImage {
-	environment = ["BP_JVM_VERSION" : "8.*"]
+tasks.named("bootBuildImage") {
+	environment["BP_JVM_VERSION"] = "17"
 }
 // end::env[]
 
-task bootBuildImageEnvironment {
+tasks.register("bootBuildImageEnvironment") {
 	doFirst {
-		bootBuildImage.environment.each { name, value -> println "$name=$value" }
+		bootBuildImage.environment.get().each { name, value -> println "$name=$value" }
 	}
 }

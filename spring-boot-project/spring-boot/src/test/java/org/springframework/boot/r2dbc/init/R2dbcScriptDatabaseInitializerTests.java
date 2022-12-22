@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,9 +38,12 @@ class R2dbcScriptDatabaseInitializerTests
 			.withUrl("r2dbc:h2:mem:///" + UUID.randomUUID() + "?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 			.build();
 
-	private final ConnectionFactory standaloneConnectionFactory = ConnectionFactoryBuilder.withUrl("r2dbc:h2:file:///"
-			+ new BuildOutput(R2dbcScriptDatabaseInitializerTests.class).getRootLocation().toURI().getPath()
-			+ UUID.randomUUID() + "?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE").build();
+	private final ConnectionFactory standaloneConnectionFactory = ConnectionFactoryBuilder
+			.withUrl("r2dbc:h2:file:///"
+					+ new BuildOutput(R2dbcScriptDatabaseInitializerTests.class).getRootLocation().getAbsolutePath()
+							.replace('\\', '/')
+					+ "/" + UUID.randomUUID() + "?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
+			.build();
 
 	@Override
 	protected R2dbcScriptDatabaseInitializer createEmbeddedDatabaseInitializer(

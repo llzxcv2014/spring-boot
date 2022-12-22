@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,12 @@ public class SpringBootPlugin implements Plugin<Project> {
 	public static final String PRODUCTION_RUNTIME_CLASSPATH_CONFIGURATION_NAME = "productionRuntimeClasspath";
 
 	/**
+	 * The name of the {@link ResolveMainClassName} task.
+	 * @since 3.0.0
+	 */
+	public static final String RESOLVE_MAIN_CLASS_NAME_TASK_NAME = "resolveMainClassName";
+
+	/**
 	 * The coordinates {@code (group:name:version)} of the
 	 * {@code spring-boot-dependencies} bom.
 	 */
@@ -98,8 +104,8 @@ public class SpringBootPlugin implements Plugin<Project> {
 
 	private void verifyGradleVersion() {
 		GradleVersion currentVersion = GradleVersion.current();
-		if (currentVersion.compareTo(GradleVersion.version("6.8")) < 0) {
-			throw new GradleException("Spring Boot plugin requires Gradle 6.8.x, 6.9.x, or 7.x. "
+		if (currentVersion.compareTo(GradleVersion.version("7.4")) < 0) {
+			throw new GradleException("Spring Boot plugin requires Gradle 7.x (7.4 or later). "
 					+ "The current version is " + currentVersion);
 		}
 	}
@@ -116,11 +122,11 @@ public class SpringBootPlugin implements Plugin<Project> {
 	}
 
 	private void registerPluginActions(Project project, Configuration bootArchives) {
-		SinglePublishedArtifact singlePublishedArtifact = new SinglePublishedArtifact(bootArchives.getArtifacts());
-		@SuppressWarnings("deprecation")
+		SinglePublishedArtifact singlePublishedArtifact = new SinglePublishedArtifact(bootArchives,
+				project.getArtifacts());
 		List<PluginApplicationAction> actions = Arrays.asList(new JavaPluginAction(singlePublishedArtifact),
-				new WarPluginAction(singlePublishedArtifact), new MavenPluginAction(bootArchives.getUploadTaskName()),
-				new DependencyManagementPluginAction(), new ApplicationPluginAction(), new KotlinPluginAction());
+				new WarPluginAction(singlePublishedArtifact), new DependencyManagementPluginAction(),
+				new ApplicationPluginAction(), new KotlinPluginAction(), new NativeImagePluginAction());
 		for (PluginApplicationAction action : actions) {
 			withPluginClassOfAction(action,
 					(pluginClass) -> project.getPlugins().withType(pluginClass, (plugin) -> action.execute(project)));
@@ -129,12 +135,15 @@ public class SpringBootPlugin implements Plugin<Project> {
 
 	private void withPluginClassOfAction(PluginApplicationAction action,
 			Consumer<Class<? extends Plugin<? extends Project>>> consumer) {
+		Class<? extends Plugin<? extends Project>> pluginClass;
 		try {
-			consumer.accept(action.getPluginClass());
+			pluginClass = action.getPluginClass();
 		}
 		catch (Throwable ex) {
-			// Plugin class unavailable. Continue.
+			// Plugin class unavailable.
+			return;
 		}
+		consumer.accept(pluginClass);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,11 +30,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionEvaluationRepor
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.boot.diagnostics.LoggingFailureAnalysisReporter;
-import org.springframework.boot.system.JavaVersion;
 import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -49,10 +46,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests for {@link NoSuchBeanDefinitionFailureAnalyzer}.
  *
  * @author Stephane Nicoll
+ * @author Scott Frederick
  */
 class NoSuchBeanDefinitionFailureAnalyzerTests {
 
-	private final NoSuchBeanDefinitionFailureAnalyzer analyzer = new NoSuchBeanDefinitionFailureAnalyzer();
+	private final AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+
+	private final NoSuchBeanDefinitionFailureAnalyzer analyzer = new NoSuchBeanDefinitionFailureAnalyzer(
+			this.context.getBeanFactory());
 
 	@Test
 	void failureAnalysisForMultipleBeans() {
@@ -154,24 +155,8 @@ class NoSuchBeanDefinitionFailureAnalyzerTests {
 	@Test
 	void failureAnalysisForUnmatchedQualifier() {
 		FailureAnalysis analysis = analyzeFailure(createFailure(QualifiedBeanConfiguration.class));
-		assertThat(analysis.getDescription()).containsPattern(determineAnnotationValuePattern());
-	}
-
-	private String determineAnnotationValuePattern() {
-		if (JavaVersion.getJavaVersion().isEqualOrNewerThan(JavaVersion.FOURTEEN)) {
-			return "@org.springframework.beans.factory.annotation.Qualifier\\(\"*alpha\"*\\)";
-		}
-		return "@org.springframework.beans.factory.annotation.Qualifier\\(value=\"*alpha\"*\\)";
-	}
-
-	@Test
-	void failureAnalysisForConfigurationPropertiesThatMaybeShouldHaveBeenConstructorBound() {
-		FailureAnalysis analysis = analyzeFailure(
-				createFailure(ConstructorBoundConfigurationPropertiesConfiguration.class));
-		assertThat(analysis.getAction()).startsWith(
-				String.format("Consider defining a bean of type '%s' in your configuration.", String.class.getName()));
-		assertThat(analysis.getAction()).contains(
-				"Consider adding @ConstructorBinding to " + NeedsConstructorBindingProperties.class.getName());
+		assertThat(analysis.getDescription())
+				.containsPattern("@org.springframework.beans.factory.annotation.Qualifier\\(\"*alpha\"*\\)");
 	}
 
 	private void assertDescriptionConstructorMissingType(FailureAnalysis analysis, Class<?> component, int index,
@@ -227,11 +212,10 @@ class NoSuchBeanDefinitionFailureAnalyzerTests {
 	}
 
 	private FatalBeanException createFailure(Class<?> config, String... environment) {
-		try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-			this.analyzer.setBeanFactory(context.getBeanFactory());
-			TestPropertyValues.of(environment).applyTo(context);
-			context.register(config);
-			context.refresh();
+		try {
+			TestPropertyValues.of(environment).applyTo(this.context);
+			this.context.register(config);
+			this.context.refresh();
 			return null;
 		}
 		catch (FatalBeanException ex) {
@@ -375,27 +359,6 @@ class NoSuchBeanDefinitionFailureAnalyzerTests {
 
 		StringNameHandler(BeanFactory beanFactory) {
 			beanFactory.getBean("test-string");
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@EnableConfigurationProperties(NeedsConstructorBindingProperties.class)
-	static class ConstructorBoundConfigurationPropertiesConfiguration {
-
-	}
-
-	@ConfigurationProperties("test")
-	static class NeedsConstructorBindingProperties {
-
-		private final String name;
-
-		NeedsConstructorBindingProperties(String name) {
-			this.name = name;
-		}
-
-		String getName() {
-			return this.name;
 		}
 
 	}

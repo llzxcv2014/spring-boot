@@ -16,6 +16,7 @@
 
 package org.springframework.boot.jdbc.init;
 
+import java.util.Collections;
 import java.util.UUID;
 
 import javax.sql.DataSource;
@@ -29,8 +30,11 @@ import org.springframework.boot.sql.init.AbstractScriptDatabaseInitializerTests;
 import org.springframework.boot.sql.init.DatabaseInitializationSettings;
 import org.springframework.boot.testsupport.BuildOutput;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.jdbc.datasource.init.ScriptStatementFailedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for {@link DataSourceScriptDatabaseInitializer}.
@@ -43,7 +47,7 @@ class DataSourceScriptDatabaseInitializerTests
 	private final HikariDataSource embeddedDataSource = DataSourceBuilder.create().type(HikariDataSource.class)
 			.url("jdbc:h2:mem:" + UUID.randomUUID()).build();
 
-	private final HikariDataSource standloneDataSource = DataSourceBuilder.create().type(HikariDataSource.class)
+	private final HikariDataSource standaloneDataSource = DataSourceBuilder.create().type(HikariDataSource.class)
 			.url("jdbc:h2:file:" + new BuildOutput(DataSourceScriptDatabaseInitializerTests.class).getRootLocation()
 					.getAbsolutePath() + "/" + UUID.randomUUID())
 			.build();
@@ -51,7 +55,7 @@ class DataSourceScriptDatabaseInitializerTests
 	@AfterEach
 	void closeDataSource() {
 		this.embeddedDataSource.close();
-		this.standloneDataSource.close();
+		this.standaloneDataSource.close();
 	}
 
 	@Test
@@ -59,6 +63,22 @@ class DataSourceScriptDatabaseInitializerTests
 		DataSourceScriptDatabaseInitializer initializer = new DataSourceScriptDatabaseInitializer(
 				new HikariDataSource(), new DatabaseInitializationSettings());
 		assertThat(initializer.isEmbeddedDatabase()).isFalse();
+	}
+
+	@Test
+	void whenCustomizeIsOverriddenThenDatabasePopulatorIsConfiguredAccordingly() {
+		DatabaseInitializationSettings settings = new DatabaseInitializationSettings();
+		settings.setContinueOnError(true);
+		settings.setDataLocations(Collections.singletonList("data.sql"));
+		DataSourceScriptDatabaseInitializer initializer = new DataSourceScriptDatabaseInitializer(
+				this.embeddedDataSource, settings) {
+			@Override
+			protected void customize(ResourceDatabasePopulator populator) {
+				assertThat(populator).hasFieldOrPropertyWithValue("continueOnError", true);
+				populator.setContinueOnError(false);
+			}
+		};
+		assertThatThrownBy(initializer::initializeDatabase).isInstanceOf(ScriptStatementFailedException.class);
 	}
 
 	@Override
@@ -70,7 +90,7 @@ class DataSourceScriptDatabaseInitializerTests
 	@Override
 	protected DataSourceScriptDatabaseInitializer createStandaloneDatabaseInitializer(
 			DatabaseInitializationSettings settings) {
-		return new DataSourceScriptDatabaseInitializer(this.standloneDataSource, settings);
+		return new DataSourceScriptDatabaseInitializer(this.standaloneDataSource, settings);
 	}
 
 	@Override
@@ -80,7 +100,7 @@ class DataSourceScriptDatabaseInitializerTests
 
 	@Override
 	protected int numberOfStandaloneRows(String sql) {
-		return numberOfRows(this.standloneDataSource, sql);
+		return numberOfRows(this.standaloneDataSource, sql);
 	}
 
 	private int numberOfRows(DataSource dataSource, String sql) {

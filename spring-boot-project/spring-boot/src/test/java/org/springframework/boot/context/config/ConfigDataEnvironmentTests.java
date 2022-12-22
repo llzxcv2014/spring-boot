@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -57,23 +56,15 @@ import static org.mockito.Mockito.mock;
  */
 class ConfigDataEnvironmentTests {
 
-	private DeferredLogFactory logFactory = Supplier::get;
+	private final DeferredLogFactory logFactory = Supplier::get;
 
-	private DefaultBootstrapContext bootstrapContext = new DefaultBootstrapContext();
+	private final DefaultBootstrapContext bootstrapContext = new DefaultBootstrapContext();
 
-	private MockApplicationEnvironment environment = new MockApplicationEnvironment();
+	private final MockApplicationEnvironment environment = new MockApplicationEnvironment();
 
-	private ResourceLoader resourceLoader = new DefaultResourceLoader();
+	private final ResourceLoader resourceLoader = new DefaultResourceLoader();
 
-	private Collection<String> additionalProfiles = Collections.emptyList();
-
-	@Test
-	void createWhenUseLegacyPropertyInEnvironmentThrowsException() {
-		this.environment.setProperty("spring.config.use-legacy-processing", "true");
-		assertThatExceptionOfType(UseLegacyConfigProcessingException.class)
-				.isThrownBy(() -> new ConfigDataEnvironment(this.logFactory, this.bootstrapContext, this.environment,
-						this.resourceLoader, this.additionalProfiles, null));
-	}
+	private final Collection<String> additionalProfiles = Collections.emptyList();
 
 	@Test
 	void createExposesEnvironmentBinderToConfigDataLocationResolvers() {
@@ -163,7 +154,7 @@ class ConfigDataEnvironmentTests {
 		ConfigDataEnvironment configDataEnvironment = new ConfigDataEnvironment(this.logFactory, this.bootstrapContext,
 				this.environment, this.resourceLoader, this.additionalProfiles, null);
 		configDataEnvironment.processAndApply();
-		List<PropertySource<?>> sources = this.environment.getPropertySources().stream().collect(Collectors.toList());
+		List<PropertySource<?>> sources = this.environment.getPropertySources().stream().toList();
 		assertThat(sources.get(sources.size() - 1)).isSameAs(defaultPropertySource);
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package org.springframework.boot.autoconfigure.hateoas;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -50,11 +50,10 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * @author Andy Wilkinson
  * @since 1.1.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(after = { WebMvcAutoConfiguration.class, JacksonAutoConfiguration.class,
+		HttpMessageConvertersAutoConfiguration.class, RepositoryRestMvcAutoConfiguration.class })
 @ConditionalOnClass({ EntityModel.class, RequestMapping.class, RequestMappingHandlerAdapter.class, Plugin.class })
 @ConditionalOnWebApplication
-@AutoConfigureAfter({ WebMvcAutoConfiguration.class, JacksonAutoConfiguration.class,
-		HttpMessageConvertersAutoConfiguration.class, RepositoryRestMvcAutoConfiguration.class })
 @EnableConfigurationProperties(HateoasProperties.class)
 public class HypermediaAutoConfiguration {
 

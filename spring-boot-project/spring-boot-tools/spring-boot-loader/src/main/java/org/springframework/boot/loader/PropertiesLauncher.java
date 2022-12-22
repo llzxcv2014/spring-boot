@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ public class PropertiesLauncher extends Launcher {
 	public static final String CONFIG_LOCATION = "loader.config.location";
 
 	/**
-	 * Properties key for boolean flag (default false) which if set will cause the
+	 * Properties key for boolean flag (default false) which, if set, will cause the
 	 * external configuration properties to be copied to System properties (assuming that
 	 * is allowed by Java security).
 	 */
@@ -269,8 +269,8 @@ public class PropertiesLauncher extends Launcher {
 			}
 			catch (IOException ex) {
 				// Close the HTTP connection (if applicable).
-				if (con instanceof HttpURLConnection) {
-					((HttpURLConnection) con).disconnect();
+				if (con instanceof HttpURLConnection httpURLConnection) {
+					httpURLConnection.disconnect();
 				}
 				throw ex;
 			}
@@ -283,8 +283,7 @@ public class PropertiesLauncher extends Launcher {
 		URLConnection connection = url.openConnection();
 		try {
 			connection.setUseCaches(connection.getClass().getSimpleName().startsWith("JNLP"));
-			if (connection instanceof HttpURLConnection) {
-				HttpURLConnection httpConnection = (HttpURLConnection) connection;
+			if (connection instanceof HttpURLConnection httpConnection) {
 				httpConnection.setRequestMethod("HEAD");
 				int responseCode = httpConnection.getResponseCode();
 				if (responseCode == HttpURLConnection.HTTP_OK) {
@@ -297,8 +296,8 @@ public class PropertiesLauncher extends Launcher {
 			return (connection.getContentLength() >= 0);
 		}
 		finally {
-			if (connection instanceof HttpURLConnection) {
-				((HttpURLConnection) connection).disconnect();
+			if (connection instanceof HttpURLConnection httpURLConnection) {
+				httpURLConnection.disconnect();
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.docu
 import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
-import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -69,7 +69,7 @@ class MetricsEndpointDocumentationTests extends MockMvcEndpointDocumentationTest
 				.perform(get("/actuator/metrics/jvm.memory.max").param("tag", "area:nonheap").param("tag",
 						"id:Compressed Class Space"))
 				.andExpect(status().isOk())
-				.andDo(document("metrics/metric-with-tags", requestParameters(parameterWithName("tag")
+				.andDo(document("metrics/metric-with-tags", queryParameters(parameterWithName("tag")
 						.description("A tag to use for drill-down in the form `name:value`."))));
 	}
 

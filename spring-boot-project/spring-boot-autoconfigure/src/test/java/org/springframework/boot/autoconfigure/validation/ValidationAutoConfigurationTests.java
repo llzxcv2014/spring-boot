@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,13 @@ package org.springframework.boot.autoconfigure.validation;
 import java.util.HashSet;
 import java.util.Set;
 
-import javax.validation.ConstraintViolationException;
-import javax.validation.Validator;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Size;
-
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 
 import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -34,10 +35,10 @@ import org.springframework.boot.autoconfigure.validation.ValidationAutoConfigura
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.validation.beanvalidation.MethodValidationExcludeFilter;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.annotation.Order;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.validation.beanvalidation.CustomValidatorBean;
@@ -48,6 +49,8 @@ import org.springframework.validation.beanvalidation.OptionalValidatorFactoryBea
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -58,9 +61,8 @@ import static org.mockito.Mockito.mock;
  */
 class ValidationAutoConfigurationTests {
 
-	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner(
-			AnnotationConfigApplicationContext::new)
-					.withConfiguration(AutoConfigurations.of(ValidationAutoConfiguration.class));
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+			.withConfiguration(AutoConfigurations.of(ValidationAutoConfiguration.class));
 
 	@Test
 	void validationAutoConfigurationShouldConfigureDefaultValidator() {
@@ -222,6 +224,33 @@ class ValidationAutoConfigurationTests {
 		this.contextRunner.withUserConfiguration(CustomValidatorConfiguration.class)
 				.run((context) -> assertThat(context.getBean(TestBeanPostProcessor.class).postProcessed)
 						.contains("someService"));
+	}
+
+	@Test
+	void validationIsEnabledInChildContext() {
+		this.contextRunner.run((parent) -> new ApplicationContextRunner()
+				.withConfiguration(AutoConfigurations.of(ValidationAutoConfiguration.class))
+				.withUserConfiguration(SampleService.class).withParent(parent).run((context) -> {
+					assertThat(context.getBeansOfType(Validator.class)).hasSize(0);
+					assertThat(parent.getBeansOfType(Validator.class)).hasSize(1);
+					SampleService service = context.getBean(SampleService.class);
+					service.doSomething("Valid");
+					assertThatExceptionOfType(ConstraintViolationException.class)
+							.isThrownBy(() -> service.doSomething("KO"));
+				}));
+	}
+
+	@Test
+	void configurationCustomizerBeansAreCalledInOrder() {
+		this.contextRunner.withUserConfiguration(ConfigurationCustomizersConfiguration.class).run((context) -> {
+			ValidationConfigurationCustomizer customizerOne = context.getBean("customizerOne",
+					ValidationConfigurationCustomizer.class);
+			ValidationConfigurationCustomizer customizerTwo = context.getBean("customizerTwo",
+					ValidationConfigurationCustomizer.class);
+			InOrder inOrder = Mockito.inOrder(customizerOne, customizerTwo);
+			then(customizerTwo).should(inOrder).customize(any(jakarta.validation.Configuration.class));
+			then(customizerOne).should(inOrder).customize(any(jakarta.validation.Configuration.class));
+		});
 	}
 
 	private boolean isPrimaryBean(AssertableApplicationContext context, String beanName) {
@@ -393,7 +422,7 @@ class ValidationAutoConfigurationTests {
 
 		static class TestBeanPostProcessor implements BeanPostProcessor {
 
-			private Set<String> postProcessed = new HashSet<>();
+			private final Set<String> postProcessed = new HashSet<>();
 
 			@Override
 			public Object postProcessAfterInitialization(Object bean, String name) {
@@ -406,6 +435,23 @@ class ValidationAutoConfigurationTests {
 				return bean;
 			}
 
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class ConfigurationCustomizersConfiguration {
+
+		@Bean
+		@Order(1)
+		ValidationConfigurationCustomizer customizerOne() {
+			return mock(ValidationConfigurationCustomizer.class);
+		}
+
+		@Bean
+		@Order(0)
+		ValidationConfigurationCustomizer customizerTwo() {
+			return mock(ValidationConfigurationCustomizer.class);
 		}
 
 	}

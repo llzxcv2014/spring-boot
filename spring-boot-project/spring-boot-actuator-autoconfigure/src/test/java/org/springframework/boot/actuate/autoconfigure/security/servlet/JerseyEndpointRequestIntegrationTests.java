@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactor
 import org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -42,7 +43,8 @@ class JerseyEndpointRequestIntegrationTests extends AbstractEndpointRequestInteg
 	void toLinksWhenApplicationPathSetShouldMatch() {
 		getContextRunner().withPropertyValues("spring.jersey.application-path=/admin").run((context) -> {
 			WebTestClient webTestClient = getWebTestClient(context);
-			webTestClient.get().uri("/admin/actuator/").exchange().expectStatus().isOk();
+			webTestClient.get().uri("/admin/actuator/").exchange().expectStatus()
+					.isEqualTo(expectedStatusWithTrailingSlash());
 			webTestClient.get().uri("/admin/actuator").exchange().expectStatus().isOk();
 		});
 	}
@@ -94,6 +96,11 @@ class JerseyEndpointRequestIntegrationTests extends AbstractEndpointRequestInteg
 					webTestClient.get().uri("/admin/actuator/se1/list").header("Authorization", getBasicAuth())
 							.exchange().expectStatus().isOk();
 				});
+	}
+
+	@Override
+	protected HttpStatus expectedStatusWithTrailingSlash() {
+		return HttpStatus.OK;
 	}
 
 	@Override

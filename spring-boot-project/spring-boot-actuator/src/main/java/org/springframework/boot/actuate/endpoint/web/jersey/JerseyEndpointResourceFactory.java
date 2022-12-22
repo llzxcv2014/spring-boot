@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,21 +28,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-import javax.ws.rs.HttpMethod;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-
+import jakarta.ws.rs.HttpMethod;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response.Status;
 import org.glassfish.jersey.process.Inflector;
 import org.glassfish.jersey.server.ContainerRequest;
 import org.glassfish.jersey.server.model.Resource;
 import org.glassfish.jersey.server.model.Resource.Builder;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.boot.actuate.endpoint.InvalidEndpointRequestException;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
 import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
+import org.springframework.boot.actuate.endpoint.OperationResponseBody;
 import org.springframework.boot.actuate.endpoint.ProducibleOperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.web.EndpointLinksResolver;
@@ -138,6 +139,7 @@ public class JerseyEndpointResourceFactory {
 			List<Function<Object, Object>> converters = new ArrayList<>();
 			converters.add(new ResourceBodyConverter());
 			if (ClassUtils.isPresent("reactor.core.publisher.Mono", OperationInflector.class.getClassLoader())) {
+				converters.add(new FluxBodyConverter());
 				converters.add(new MonoBodyConverter());
 			}
 			BODY_CONVERTERS = Collections.unmodifiableList(converters);
@@ -238,21 +240,16 @@ public class JerseyEndpointResourceFactory {
 				Status status = isGet ? Status.NOT_FOUND : Status.NO_CONTENT;
 				return Response.status(status).build();
 			}
-			try {
-				if (!(response instanceof WebEndpointResponse)) {
-					return Response.status(Status.OK).entity(convertIfNecessary(response)).build();
-				}
-				WebEndpointResponse<?> webEndpointResponse = (WebEndpointResponse<?>) response;
-				return Response.status(webEndpointResponse.getStatus())
-						.header("Content-Type", webEndpointResponse.getContentType())
-						.entity(convertIfNecessary(webEndpointResponse.getBody())).build();
+			if (!(response instanceof WebEndpointResponse)) {
+				return Response.status(Status.OK).entity(convertIfNecessary(response)).build();
 			}
-			catch (IOException ex) {
-				return Response.status(Status.INTERNAL_SERVER_ERROR).build();
-			}
+			WebEndpointResponse<?> webEndpointResponse = (WebEndpointResponse<?>) response;
+			return Response.status(webEndpointResponse.getStatus())
+					.header("Content-Type", webEndpointResponse.getContentType())
+					.entity(convertIfNecessary(webEndpointResponse.getBody())).build();
 		}
 
-		private Object convertIfNecessary(Object body) throws IOException {
+		private Object convertIfNecessary(Object body) {
 			for (Function<Object, Object> converter : BODY_CONVERTERS) {
 				body = converter.apply(body);
 			}
@@ -298,6 +295,21 @@ public class JerseyEndpointResourceFactory {
 	}
 
 	/**
+	 * Body converter from {@link Flux} to {@link Flux#collectList Mono&lt;List&gt;}.
+	 */
+	private static final class FluxBodyConverter implements Function<Object, Object> {
+
+		@Override
+		public Object apply(Object body) {
+			if (body instanceof Flux) {
+				return ((Flux<?>) body).collectList();
+			}
+			return body;
+		}
+
+	}
+
+	/**
 	 * {@link Inflector} to for endpoint links.
 	 */
 	private static final class EndpointLinksInflector implements Inflector<ContainerRequestContext, Response> {
@@ -312,16 +324,17 @@ public class JerseyEndpointResourceFactory {
 		public Response apply(ContainerRequestContext request) {
 			Map<String, Link> links = this.linksResolver
 					.resolveLinks(request.getUriInfo().getAbsolutePath().toString());
-			return Response.ok(Collections.singletonMap("_links", links)).build();
+			Map<String, Map<String, Link>> entity = OperationResponseBody.of(Collections.singletonMap("_links", links));
+			return Response.ok(entity).build();
 		}
 
 	}
 
 	private static final class JerseySecurityContext implements SecurityContext {
 
-		private final javax.ws.rs.core.SecurityContext securityContext;
+		private final jakarta.ws.rs.core.SecurityContext securityContext;
 
-		private JerseySecurityContext(javax.ws.rs.core.SecurityContext securityContext) {
+		private JerseySecurityContext(jakarta.ws.rs.core.SecurityContext securityContext) {
 			this.securityContext = securityContext;
 		}
 

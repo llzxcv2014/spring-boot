@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.util.function.Function;
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.TestAutoConfigurationPackage;
@@ -32,19 +33,31 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.domain.ManagedTypes;
+import org.springframework.data.jdbc.core.JdbcAggregateTemplate;
+import org.springframework.data.jdbc.core.convert.DataAccessStrategy;
+import org.springframework.data.jdbc.core.convert.JdbcConverter;
+import org.springframework.data.jdbc.core.convert.JdbcCustomConversions;
+import org.springframework.data.jdbc.core.mapping.JdbcMappingContext;
 import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration;
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories;
+import org.springframework.data.relational.RelationalManagedTypes;
+import org.springframework.data.relational.core.dialect.Dialect;
 import org.springframework.data.repository.Repository;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 /**
  * Tests for {@link JdbcRepositoriesAutoConfiguration}.
  *
  * @author Andy Wilkinson
  * @author Stephane Nicoll
+ * @author Mark Paluch
  */
 class JdbcRepositoriesAutoConfigurationTests {
 
@@ -89,6 +102,19 @@ class JdbcRepositoriesAutoConfigurationTests {
 	}
 
 	@Test
+	void entityScanShouldSetManagedTypes() {
+		this.contextRunner.with(database())
+				.withConfiguration(AutoConfigurations.of(JdbcTemplateAutoConfiguration.class,
+						DataSourceTransactionManagerAutoConfiguration.class))
+				.withUserConfiguration(TestConfiguration.class).run((context) -> {
+					JdbcMappingContext mappingContext = context.getBean(JdbcMappingContext.class);
+					ManagedTypes managedTypes = (ManagedTypes) ReflectionTestUtils.getField(mappingContext,
+							"managedTypes");
+					assertThat(managedTypes.toList()).containsOnly(City.class);
+				});
+	}
+
+	@Test
 	void autoConfigurationWithNoRepositories() {
 		this.contextRunner.with(database())
 				.withConfiguration(AutoConfigurations.of(JdbcTemplateAutoConfiguration.class,
@@ -108,6 +134,56 @@ class JdbcRepositoriesAutoConfigurationTests {
 					assertThat(context).hasSingleBean(AbstractJdbcConfiguration.class);
 					assertThat(context).hasSingleBean(CityRepository.class);
 					assertThat(context.getBean(CityRepository.class).findById(2000L)).isPresent();
+				});
+	}
+
+	@Test
+	void allowsUserToDefineCustomRelationalManagedTypes() {
+		allowsUserToDefineCustomBean(RelationalManagedTypesConfiguration.class, RelationalManagedTypes.class,
+				"customRelationalManagedTypes");
+	}
+
+	@Test
+	void allowsUserToDefineCustomJdbcMappingContext() {
+		allowsUserToDefineCustomBean(JdbcMappingContextConfiguration.class, JdbcMappingContext.class,
+				"customJdbcMappingContext");
+	}
+
+	@Test
+	void allowsUserToDefineCustomJdbcConverter() {
+		allowsUserToDefineCustomBean(JdbcConverterConfiguration.class, JdbcConverter.class, "customJdbcConverter");
+	}
+
+	@Test
+	void allowsUserToDefineCustomJdbcCustomConversions() {
+		allowsUserToDefineCustomBean(JdbcCustomConversionsConfiguration.class, JdbcCustomConversions.class,
+				"customJdbcCustomConversions");
+	}
+
+	@Test
+	void allowsUserToDefineCustomJdbcAggregateTemplate() {
+		allowsUserToDefineCustomBean(JdbcAggregateTemplateConfiguration.class, JdbcAggregateTemplate.class,
+				"customJdbcAggregateTemplate");
+	}
+
+	@Test
+	void allowsUserToDefineCustomDataAccessStrategy() {
+		allowsUserToDefineCustomBean(DataAccessStrategyConfiguration.class, DataAccessStrategy.class,
+				"customDataAccessStrategy");
+	}
+
+	@Test
+	void allowsUserToDefineCustomDialect() {
+		allowsUserToDefineCustomBean(DialectConfiguration.class, Dialect.class, "customDialect");
+	}
+
+	private void allowsUserToDefineCustomBean(Class<?> configuration, Class<?> beanType, String beanName) {
+		this.contextRunner.with(database())
+				.withConfiguration(AutoConfigurations.of(JdbcTemplateAutoConfiguration.class,
+						DataSourceTransactionManagerAutoConfiguration.class))
+				.withUserConfiguration(configuration, EmptyConfiguration.class).run((context) -> {
+					assertThat(context).hasSingleBean(beanType);
+					assertThat(context).hasBean(beanName);
 				});
 	}
 
@@ -134,6 +210,76 @@ class JdbcRepositoriesAutoConfigurationTests {
 	@TestAutoConfigurationPackage(EmptyDataPackage.class)
 	@EnableJdbcRepositories(basePackageClasses = City.class)
 	static class EnableRepositoriesConfiguration {
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class RelationalManagedTypesConfiguration {
+
+		@Bean
+		RelationalManagedTypes customRelationalManagedTypes() {
+			return RelationalManagedTypes.empty();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class JdbcMappingContextConfiguration {
+
+		@Bean
+		JdbcMappingContext customJdbcMappingContext() {
+			return mock(JdbcMappingContext.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class JdbcConverterConfiguration {
+
+		@Bean
+		JdbcConverter customJdbcConverter() {
+			return mock(JdbcConverter.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class JdbcCustomConversionsConfiguration {
+
+		@Bean
+		JdbcCustomConversions customJdbcCustomConversions() {
+			return mock(JdbcCustomConversions.class, Answers.RETURNS_MOCKS);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class JdbcAggregateTemplateConfiguration {
+
+		@Bean
+		JdbcAggregateTemplate customJdbcAggregateTemplate() {
+			return mock(JdbcAggregateTemplate.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class DataAccessStrategyConfiguration {
+
+		@Bean
+		DataAccessStrategy customDataAccessStrategy() {
+			return mock(DataAccessStrategy.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class DialectConfiguration {
+
+		@Bean
+		Dialect customDialect() {
+			return mock(Dialect.class, Answers.RETURNS_MOCKS);
+		}
 
 	}
 

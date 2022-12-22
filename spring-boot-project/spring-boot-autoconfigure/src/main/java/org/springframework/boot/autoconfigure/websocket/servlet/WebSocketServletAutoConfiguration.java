@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 package org.springframework.boot.autoconfigure.websocket.servlet;
 
-import javax.servlet.Servlet;
-import javax.websocket.server.ServerContainer;
-
+import jakarta.servlet.Servlet;
+import jakarta.websocket.server.ServerContainer;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.tomcat.websocket.server.WsSci;
-import org.eclipse.jetty.websocket.jsr356.server.deploy.WebSocketServerContainerInitializer;
+import org.eclipse.jetty.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -53,10 +52,9 @@ import org.springframework.context.annotation.Configuration;
  * @author Andy Wilkinson
  * @since 1.0.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(before = ServletWebServerFactoryAutoConfiguration.class)
 @ConditionalOnClass({ Servlet.class, ServerContainer.class })
 @ConditionalOnWebApplication(type = Type.SERVLET)
-@AutoConfigureBefore(ServletWebServerFactoryAutoConfiguration.class)
 public class WebSocketServletAutoConfiguration {
 
 	@Configuration(proxyBeanMethods = false)
@@ -72,26 +70,13 @@ public class WebSocketServletAutoConfiguration {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnClass(WebSocketServerContainerInitializer.class)
+	@ConditionalOnClass(JakartaWebSocketServletContainerInitializer.class)
 	static class JettyWebSocketConfiguration {
 
 		@Bean
 		@ConditionalOnMissingBean(name = "websocketServletWebServerCustomizer")
 		JettyWebSocketServletWebServerCustomizer websocketServletWebServerCustomizer() {
 			return new JettyWebSocketServletWebServerCustomizer();
-		}
-
-	}
-
-	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnClass(name = { Jetty10WebSocketServletWebServerCustomizer.JAVAX_WEB_SOCKET_SERVER_CONTAINER,
-			Jetty10WebSocketServletWebServerCustomizer.JETTY_WEB_SOCKET_SERVER_CONTAINER })
-	static class Jetty10WebSocketConfiguration {
-
-		@Bean
-		@ConditionalOnMissingBean(name = "websocketServletWebServerCustomizer")
-		Jetty10WebSocketServletWebServerCustomizer websocketServletWebServerCustomizer() {
-			return new Jetty10WebSocketServletWebServerCustomizer();
 		}
 
 	}

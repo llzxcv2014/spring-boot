@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -187,19 +187,41 @@ public class Library {
 
 		private final String name;
 
+		private final String type;
+
+		private final String classifier;
+
 		private final List<Exclusion> exclusions;
 
 		public Module(String name) {
 			this(name, Collections.emptyList());
 		}
 
+		public Module(String name, String type) {
+			this(name, type, null, Collections.emptyList());
+		}
+
 		public Module(String name, List<Exclusion> exclusions) {
+			this(name, null, null, exclusions);
+		}
+
+		public Module(String name, String type, String classifier, List<Exclusion> exclusions) {
 			this.name = name;
+			this.type = type;
+			this.classifier = (classifier != null) ? classifier : "";
 			this.exclusions = exclusions;
 		}
 
 		public String getName() {
 			return this.name;
+		}
+
+		public String getClassifier() {
+			return this.classifier;
+		}
+
+		public String getType() {
+			return this.type;
 		}
 
 		public List<Exclusion> getExclusions() {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.time.Duration;
 import java.util.UUID;
-import java.util.function.Function;
 
 import javax.sql.DataSource;
 
@@ -28,6 +27,7 @@ import io.r2dbc.h2.H2ConnectionFactory;
 import io.r2dbc.pool.ConnectionPool;
 import io.r2dbc.pool.PoolMetrics;
 import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.ConnectionFactoryProvider;
 import io.r2dbc.spi.Option;
 import io.r2dbc.spi.Wrapped;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -93,19 +93,36 @@ class R2dbcAutoConfigurationTests {
 					assertThat(context).hasSingleBean(ConnectionFactory.class).hasSingleBean(ConnectionPool.class)
 							.hasSingleBean(R2dbcProperties.class);
 					ConnectionPool connectionPool = context.getBean(ConnectionPool.class);
-					assertThat(connectionPool).hasFieldOrPropertyWithValue("maxAcquireTime", Duration.ZERO);
+					assertThat(connectionPool).hasFieldOrPropertyWithValue("maxAcquireTime", Duration.ofMillis(-1));
 				});
 	}
 
 	@Test
-	void configureWithUrlPoolAndPoolPropertiesApplyUrlPoolOptions() {
+	void configureWithUrlPoolAndPoolPropertiesFails() {
 		this.contextRunner
 				.withPropertyValues("spring.r2dbc.url:r2dbc:pool:h2:mem:///" + randomDatabaseName() + "?maxSize=12",
 						"spring.r2dbc.pool.max-size=15")
+				.run((context) -> assertThat(context).getFailure().rootCause()
+						.isInstanceOf(MultipleConnectionPoolConfigurationsException.class));
+	}
+
+	@Test
+	void configureWithUrlPoolAndPropertyBasedPoolingDisabledFails() {
+		this.contextRunner
+				.withPropertyValues("spring.r2dbc.url:r2dbc:pool:h2:mem:///" + randomDatabaseName() + "?maxSize=12",
+						"spring.r2dbc.pool.enabled=false")
+				.run((context) -> assertThat(context).getFailure().rootCause()
+						.isInstanceOf(MultipleConnectionPoolConfigurationsException.class));
+	}
+
+	@Test
+	void configureWithUrlPoolAndNoPoolPropertiesCreatesPool() {
+		this.contextRunner
+				.withPropertyValues("spring.r2dbc.url:r2dbc:pool:h2:mem:///" + randomDatabaseName() + "?maxSize=12")
 				.run((context) -> {
 					assertThat(context).hasSingleBean(ConnectionFactory.class).hasSingleBean(ConnectionPool.class);
-					PoolMetrics poolMetrics = context.getBean(ConnectionPool.class).getMetrics().get();
-					assertThat(poolMetrics.getMaxAllocatedSize()).isEqualTo(12);
+					ConnectionPool connectionPool = context.getBean(ConnectionPool.class);
+					assertThat(connectionPool.getMetrics().get().getMaxAllocatedSize()).isEqualTo(12);
 				});
 	}
 
@@ -132,27 +149,6 @@ class R2dbcAutoConfigurationTests {
 	}
 
 	@Test
-	void configureWithoutR2dbcPoolCreateGenericConnectionFactory() {
-		this.contextRunner.with(hideConnectionPool()).withPropertyValues("spring.r2dbc.url:r2dbc:h2:mem:///"
-				+ randomDatabaseName() + "?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE").run((context) -> {
-					assertThat(context).hasSingleBean(ConnectionFactory.class);
-					assertThat(context.getBean(ConnectionFactory.class))
-							.asInstanceOf(type(OptionsCapableConnectionFactory.class))
-							.extracting(Wrapped<ConnectionFactory>::unwrap)
-							.isExactlyInstanceOf(H2ConnectionFactory.class);
-				});
-	}
-
-	@Test
-	void configureWithoutR2dbcPoolAndPoolEnabledDoesNotCreateConnectionFactory() {
-		this.contextRunner.with(hideConnectionPool())
-				.withPropertyValues("spring.r2dbc.pool.enabled=true",
-						"spring.r2dbc.url:r2dbc:h2:mem:///" + randomDatabaseName()
-								+ "?options=DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
-				.run((context) -> assertThat(context).doesNotHaveBean(ConnectionFactory.class));
-	}
-
-	@Test
 	void configureWithoutPoolInvokeOptionCustomizer() {
 		this.contextRunner
 				.withPropertyValues("spring.r2dbc.pool.enabled=false", "spring.r2dbc.url:r2dbc:simple://host/database")
@@ -160,8 +156,9 @@ class R2dbcAutoConfigurationTests {
 					assertThat(context).hasSingleBean(ConnectionFactory.class).doesNotHaveBean(ConnectionPool.class);
 					ConnectionFactory connectionFactory = context.getBean(ConnectionFactory.class);
 					assertThat(connectionFactory).asInstanceOf(type(OptionsCapableConnectionFactory.class))
-							.extracting(OptionsCapableConnectionFactory::getOptions).satisfies((options) -> assertThat(
-									options.getRequiredValue(Option.<Boolean>valueOf("customized"))).isTrue());
+							.extracting(OptionsCapableConnectionFactory::getOptions)
+							.satisfies((options) -> assertThat(options.getRequiredValue(Option.valueOf("customized")))
+									.isEqualTo(Boolean.TRUE));
 				});
 	}
 
@@ -173,8 +170,9 @@ class R2dbcAutoConfigurationTests {
 					ConnectionFactory pool = context.getBean(ConnectionFactory.class);
 					ConnectionFactory connectionFactory = ((ConnectionPool) pool).unwrap();
 					assertThat(connectionFactory).asInstanceOf(type(OptionsCapableConnectionFactory.class))
-							.extracting(OptionsCapableConnectionFactory::getOptions).satisfies((options) -> assertThat(
-									options.getRequiredValue(Option.<Boolean>valueOf("customized"))).isTrue());
+							.extracting(OptionsCapableConnectionFactory::getOptions)
+							.satisfies((options) -> assertThat(options.getRequiredValue(Option.valueOf("customized")))
+									.isEqualTo(Boolean.TRUE));
 				});
 	}
 
@@ -256,6 +254,14 @@ class R2dbcAutoConfigurationTests {
 	}
 
 	@Test
+	void configureWithoutUrlAndNoConnectionFactoryProviderBacksOff() {
+		this.contextRunner
+				.withClassLoader(new FilteredClassLoader(
+						("META-INF/services/" + ConnectionFactoryProvider.class.getName())::equals))
+				.run((context) -> assertThat(context).doesNotHaveBean(R2dbcAutoConfiguration.class));
+	}
+
+	@Test
 	void configureWithDataSourceAutoConfigurationDoesNotCreateDataSource() {
 		this.contextRunner.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class))
 				.run((context) -> assertThat(context).hasSingleBean(ConnectionFactory.class)
@@ -286,10 +292,6 @@ class R2dbcAutoConfigurationTests {
 
 	private String randomDatabaseName() {
 		return "testdb-" + UUID.randomUUID();
-	}
-
-	private Function<ApplicationContextRunner, ApplicationContextRunner> hideConnectionPool() {
-		return (runner) -> runner.withClassLoader(new FilteredClassLoader("io.r2dbc.pool"));
 	}
 
 	private static class DisableEmbeddedDatabaseClassLoader extends URLClassLoader {

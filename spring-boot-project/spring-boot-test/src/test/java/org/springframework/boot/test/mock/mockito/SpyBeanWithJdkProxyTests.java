@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.then;
 
 /**
  * Tests for {@link SpyBean @SpyBean} with a JDK proxy.
@@ -47,10 +47,10 @@ class SpyBeanWithJdkProxyTests {
 	private ExampleRepository repository;
 
 	@Test
-	void jdkProxyCanBeSpied() throws Exception {
+	void jdkProxyCanBeSpied() {
 		Example example = this.service.find("id");
 		assertThat(example.id).isEqualTo("id");
-		verify(this.repository).find("id");
+		then(this.repository).should().find("id");
 	}
 
 	@Configuration(proxyBeanMethods = false)

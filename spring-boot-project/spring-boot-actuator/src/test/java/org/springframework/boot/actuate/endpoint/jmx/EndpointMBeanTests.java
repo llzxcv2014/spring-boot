@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import javax.management.MBeanInfo;
 import javax.management.ReflectionException;
 
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.beans.FatalBeanException;
@@ -37,9 +38,9 @@ import org.springframework.util.ClassUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link EndpointMBean}.
@@ -53,9 +54,9 @@ class EndpointMBeanTests {
 
 	private static final String[] NO_SIGNATURE = {};
 
-	private TestExposableJmxEndpoint endpoint = new TestExposableJmxEndpoint(new TestJmxOperation());
+	private final TestExposableJmxEndpoint endpoint = new TestExposableJmxEndpoint(new TestJmxOperation());
 
-	private TestJmxOperationResponseMapper responseMapper = new TestJmxOperationResponseMapper();
+	private final TestJmxOperationResponseMapper responseMapper = new TestJmxOperationResponseMapper();
 
 	@Test
 	void createWhenResponseMapperIsNullShouldThrowException() {
@@ -156,12 +157,21 @@ class EndpointMBeanTests {
 	}
 
 	@Test
+	void invokeWhenFluxResultShouldCollectToMonoListAndBlockOnMono() throws MBeanException, ReflectionException {
+		TestExposableJmxEndpoint endpoint = new TestExposableJmxEndpoint(
+				new TestJmxOperation((arguments) -> Flux.just("flux", "result")));
+		EndpointMBean bean = new EndpointMBean(this.responseMapper, null, endpoint);
+		Object result = bean.invoke("testOperation", NO_PARAMS, NO_SIGNATURE);
+		assertThat(result).asList().containsExactly("flux", "result");
+	}
+
+	@Test
 	void invokeShouldCallResponseMapper() throws MBeanException, ReflectionException {
 		TestJmxOperationResponseMapper responseMapper = spy(this.responseMapper);
 		EndpointMBean bean = new EndpointMBean(responseMapper, null, this.endpoint);
 		bean.invoke("testOperation", NO_PARAMS, NO_SIGNATURE);
-		verify(responseMapper).mapResponseType(String.class);
-		verify(responseMapper).mapResponse("result");
+		then(responseMapper).should().mapResponseType(String.class);
+		then(responseMapper).should().mapResponse("result");
 	}
 
 	@Test

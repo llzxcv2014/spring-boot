@@ -24,6 +24,9 @@ To include devtools support, add the module dependency to your build, as shown i
 	}
 ----
 
+CAUTION: Devtools might cause classloading issues, in particular in multi-module projects.
+<<using#using.devtools.diagnosing-classloading-issues>> explains how to diagnose and solve them.
+
 NOTE: Developer tools are automatically disabled when running a fully packaged application.
 If your application is launched from `java -jar` or if it is started from a special classloader, then it is considered a "`production application`".
 You can control this behavior by using the `spring.devtools.restart.enabled` system property.
@@ -40,6 +43,17 @@ When using the Gradle plugin, {spring-boot-gradle-plugin-docs}#packaging-executa
 
 
 
+[[using.devtools.diagnosing-classloading-issues]]
+=== Diagnosing Classloading Issues
+As described in the <<using#using.devtools.restart.restart-vs-reload>> section, restart functionality is implemented by using two classloaders.
+For most applications, this approach works well.
+However, it can sometimes cause classloading issues, in particular in multi-module projects.
+
+To diagnose whether the classloading issues are indeed caused by devtools and its two classloaders, <<using#using.devtools.restart.disable,try disabling restart>>.
+If this solves your problems, <<using#using.devtools.restart.customizing-the-classload,customize the restart classloader>> to include your entire project.
+
+
+
 [[using.devtools.property-defaults]]
 === Property Defaults
 Several of the libraries supported by Spring Boot use caches to improve performance.
@@ -53,13 +67,15 @@ Cache options are usually configured by settings in your `application.properties
 For example, Thymeleaf offers the configprop:spring.thymeleaf.cache[] property.
 Rather than needing to set these properties manually, the `spring-boot-devtools` module automatically applies sensible development-time configuration.
 
+The following table lists all the properties that are applied:
+
+include::devtools-property-defaults.adoc[]
+
+NOTE: If you do not want property defaults to be applied you can set configprop:spring.devtools.add-properties[] to `false` in your `application.properties`.
+
 Because you need more information about web requests while developing Spring MVC and Spring WebFlux applications, developer tools suggests you to enable `DEBUG` logging for the `web` logging group.
-This will give you information about the incoming request, which handler is processing it, the response outcome, etc.
+This will give you information about the incoming request, which handler is processing it, the response outcome, and other details.
 If you wish to log all request details (including potentially sensitive information), you can turn on the configprop:spring.mvc.log-request-details[] or configprop:spring.codec.log-request-details[] configuration properties.
-
-NOTE: If you don't want property defaults to be applied you can set configprop:spring.devtools.add-properties[] to `false` in your `application.properties`.
-
-TIP: For a complete list of the properties that are applied by the devtools, see {spring-boot-devtools-module-code}/env/DevToolsPropertyDefaultsPostProcessor.java[DevToolsPropertyDefaultsPostProcessor].
 
 
 
@@ -73,7 +89,8 @@ Note that certain resources, such as static assets and view templates, <<using#u
 .Triggering a restart
 ****
 As DevTools monitors classpath resources, the only way to trigger a restart is to update the classpath.
-The way in which you cause the classpath to be updated depends on the IDE that you are using:
+Whether you're using an IDE or one of the build plugins, the modified files have to be recompiled to trigger a restart.
+The way in which you cause the classpath to be updated depends on the tool that you are using:
 
 * In Eclipse, saving a modified file causes the classpath to be updated and triggers a restart.
 * In IntelliJ IDEA, building the project (`Build +->+ Build Project`) has the same effect.
@@ -95,7 +112,9 @@ NOTE: DevTools needs to customize the `ResourceLoader` used by the `ApplicationC
 If your application provides one already, it is going to be wrapped.
 Direct override of the `getResource` method on the `ApplicationContext` is not supported.
 
-[[using-spring-boot-restart-vs-reload]]
+CAUTION: Automatic restart is not supported when using AspectJ weaving.
+
+[[using.devtools.restart.restart-vs-reload]]
 .Restart vs Reload
 ****
 The restart technology provided by Spring Boot works by using two classloaders.
@@ -111,7 +130,7 @@ These work by rewriting classes as they are loaded to make them more amenable to
 
 
 [[using.devtools.restart.logging-condition-delta]]
-==== Logging changes in condition evaluation
+==== Logging Changes in Condition Evaluation
 By default, each time your application restarts, a report showing the condition evaluation delta is logged.
 The report shows the changes to your application's auto-configuration as you make changes such as adding or removing beans and setting configuration properties.
 
@@ -162,10 +181,7 @@ In most cases, you can set this property in your `application.properties` (doing
 
 If you need to _completely_ disable restart support (for example, because it does not work with a specific library), you need to set the configprop:spring.devtools.restart.enabled[] `System` property to `false` before calling `SpringApplication.run(...)`, as shown in the following example:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/devtools/restart/disable/MyApplication.java[]
-----
+include::code:MyApplication[]
 
 
 
@@ -212,14 +228,13 @@ For IntelliJ IDEA, you can follow the https://www.jetbrains.com/help/idea/spring
 
 [[using.devtools.restart.customizing-the-classload]]
 ==== Customizing the Restart Classloader
-As described earlier in the <<using-spring-boot-restart-vs-reload>> section, restart functionality is implemented by using two classloaders.
-For most applications, this approach works well.
-However, it can sometimes cause classloading issues.
+As described earlier in the <<using#using.devtools.restart.restart-vs-reload>> section, restart functionality is implemented by using two classloaders.
+If this causes issues, you might need to customize what gets loaded by which classloader.
 
 By default, any open project in your IDE is loaded with the "`restart`" classloader, and any regular `.jar` file is loaded with the "`base`" classloader.
-If you work on a multi-module project, and not every module is imported into your IDE, you may need to customize things.
-To do so, you can create a `META-INF/spring-devtools.properties` file.
+The same is true if you use `mvn spring-boot:run` or `gradle bootRun`: the project containing your `@SpringBootApplication` is loaded with the "`restart`" classloader, and everything else with the "`base`" classloader.
 
+You can instruct Spring Boot to load parts of your project with a different classloader by creating a `META-INF/spring-devtools.properties` file.
 The `spring-devtools.properties` file can contain properties prefixed with `restart.exclude` and `restart.include`.
 The `include` elements are items that should be pulled up into the "`restart`" classloader, and the `exclude` elements are items that should be pushed down into the "`base`" classloader.
 The value of the property is a regex pattern that is applied to the classpath, as shown in the following example:
@@ -353,6 +368,8 @@ Remote devtools support is provided in two parts: a server-side endpoint that ac
 The server component is automatically enabled when the configprop:spring.devtools.remote.secret[] property is set.
 The client component must be launched manually.
 
+NOTE: Remote devtools is not supported for Spring WebFlux applications.
+
 
 
 [[using.devtools.remote-applications.client]]
@@ -373,19 +390,7 @@ A running remote client might resemble the following listing:
 
 [indent=0,subs="verbatim,attributes"]
 ----
-	  .   ____          _                                              __ _ _
-	 /\\ / ___'_ __ _ _(_)_ __  __ _          ___               _      \ \ \ \
-	( ( )\___ | '_ | '_| | '_ \/ _` |        | _ \___ _ __  ___| |_ ___ \ \ \ \
-	 \\/  ___)| |_)| | | | | || (_| []::::::[]   / -_) '  \/ _ \  _/ -_) ) ) ) )
-	  '  |____| .__|_| |_|_| |_\__, |        |_|_\___|_|_|_\___/\__\___|/ / / /
-	 =========|_|==============|___/===================================/_/_/_/
-	 :: Spring Boot Remote :: {spring-boot-version}
-
-	2015-06-10 18:25:06.632  INFO 14938 --- [           main] o.s.b.devtools.RemoteSpringApplication   : Starting RemoteSpringApplication on pwmbp with PID 14938 (/Users/pwebb/projects/spring-boot/code/spring-boot-project/spring-boot-devtools/target/classes started by pwebb in /Users/pwebb/projects/spring-boot/code)
-	2015-06-10 18:25:06.671  INFO 14938 --- [           main] s.c.a.AnnotationConfigApplicationContext : Refreshing org.springframework.context.annotation.AnnotationConfigApplicationContext@2a17b7b6: startup date [Wed Jun 10 18:25:06 PDT 2015]; root of context hierarchy
-	2015-06-10 18:25:07.043  WARN 14938 --- [           main] o.s.b.d.r.c.RemoteClientConfiguration    : The connection to http://localhost:8080 is insecure. You should use a URL starting with 'https://'.
-	2015-06-10 18:25:07.074  INFO 14938 --- [           main] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
-	2015-06-10 18:25:07.130  INFO 14938 --- [           main] o.s.b.devtools.RemoteSpringApplication   : Started RemoteSpringApplication in 0.74 seconds (JVM running for 1.105)
+include::{remote-spring-application-output}[]
 ----
 
 NOTE: Because the remote client is using the same classpath as the real application it can directly read application properties.

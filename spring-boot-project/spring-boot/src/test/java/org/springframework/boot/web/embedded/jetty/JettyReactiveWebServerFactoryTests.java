@@ -25,9 +25,11 @@ import org.awaitility.Awaitility;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
+import org.springframework.boot.testsupport.web.servlet.Servlet5ClassPathOverrides;
 import org.springframework.boot.web.reactive.server.AbstractReactiveWebServerFactoryTests;
 import org.springframework.boot.web.server.Shutdown;
 import org.springframework.http.client.reactive.JettyResourceFactory;
@@ -46,11 +48,19 @@ import static org.mockito.Mockito.mock;
  * @author Brian Clozel
  * @author Madhura Bhave
  */
+@Servlet5ClassPathOverrides
 class JettyReactiveWebServerFactoryTests extends AbstractReactiveWebServerFactoryTests {
 
 	@Override
 	protected JettyReactiveWebServerFactory getFactory() {
 		return new JettyReactiveWebServerFactory(0);
+	}
+
+	@Test
+	@Override
+	@Disabled("Jetty 11 does not support User-Agent-based compression")
+	protected void noCompressionForUserAgent() {
+
 	}
 
 	@Test

@@ -20,8 +20,8 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProvider;
 import org.springframework.boot.autoconfigure.template.TemplateAvailabilityProviders;
@@ -66,7 +66,7 @@ public class DefaultErrorViewResolver implements ErrorViewResolver, Ordered {
 		SERIES_VIEWS = Collections.unmodifiableMap(views);
 	}
 
-	private ApplicationContext applicationContext;
+	private final ApplicationContext applicationContext;
 
 	private final Resources resources;
 
@@ -145,7 +145,7 @@ public class DefaultErrorViewResolver implements ErrorViewResolver, Ordered {
 	 */
 	private static class HtmlResourceView implements View {
 
-		private Resource resource;
+		private final Resource resource;
 
 		HtmlResourceView(Resource resource) {
 			this.resource = resource;

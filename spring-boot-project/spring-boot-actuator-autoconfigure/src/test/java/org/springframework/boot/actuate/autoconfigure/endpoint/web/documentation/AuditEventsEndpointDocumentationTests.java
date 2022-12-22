@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,12 @@ import org.springframework.context.annotation.Import;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
-import static org.springframework.restdocs.request.RequestDocumentation.requestParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -76,14 +76,14 @@ class AuditEventsEndpointDocumentationTests extends MockMvcEndpointDocumentation
 						.param("principal", "alice").param("after", queryTimestamp).param("type", "logout"))
 				.andExpect(status().isOk())
 				.andDo(document("auditevents/filtered",
-						requestParameters(
+						queryParameters(
 								parameterWithName("after").description(
 										"Restricts the events to those that occurred after the given time. Optional."),
 								parameterWithName("principal").description(
 										"Restricts the events to those with the given principal. Optional."),
 								parameterWithName("type")
 										.description("Restricts the events to those with the given type. Optional."))));
-		verify(this.repository).find("alice", now.toInstant(), "logout");
+		then(this.repository).should().find("alice", now.toInstant(), "logout");
 	}
 
 	@Configuration(proxyBeanMethods = false)

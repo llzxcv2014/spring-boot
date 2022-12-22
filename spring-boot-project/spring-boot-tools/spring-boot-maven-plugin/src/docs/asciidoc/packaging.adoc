@@ -14,7 +14,7 @@ TIP: If you are using `spring-boot-starter-parent`, such execution is already pr
 The example above repackages a `jar` or `war` archive that is built during the package phase of the Maven lifecycle, including any `provided` dependencies that are defined in the project.
 If some of these dependencies need to be excluded, you can use one of the `exclude` options; see the <<packaging.examples.exclude-dependency,dependency exclusion>> for more details.
 
-The original (i.e. non-executable) artifact is renamed to `.original` by default but it is also possible to keep the original artifact using a custom classifier.
+The original (that is non-executable) artifact is renamed to `.original` by default but it is also possible to keep the original artifact using a custom classifier.
 
 NOTE: The `outputFileNameMapping` feature of the `maven-war-plugin` is currently not supported.
 
@@ -71,7 +71,7 @@ include::../maven/packaging/disable-layers-pom.xml[tags=disable-layers]
 
 
 
-[[packaging.layers.configuration=]]
+[[packaging.layers.configuration]]
 === Custom Layers Configuration
 Depending on your application, you may want to tune how layers are created and add new ones.
 This can be done using a separate configuration file that should be registered as shown below:
@@ -100,7 +100,7 @@ The blocks are evaluated in the order that they are defined, from top to bottom.
 Any content not claimed by an earlier block remains available for subsequent blocks to consider.
 
 The `<into>` block claims content using nested `<include>` and `<exclude>` elements.
-The `<application>` section uses Ant-style patch matching for include/exclude expressions.
+The `<application>` section uses Ant-style path matching for include/exclude expressions.
 The `<dependencies>` section uses `group:artifact[:version]` patterns.
 It also provides `<includeModuleDependencies />` and `<excludeModuleDependencies />` elements that can be used to include or exclude local module dependencies.
 

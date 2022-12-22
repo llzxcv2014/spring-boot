@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,11 @@ package org.springframework.boot.autoconfigure.batch;
 import java.util.Collection;
 import java.util.Collections;
 
-import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.Job;
@@ -30,42 +31,50 @@ import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.DuplicateJobException;
+import org.springframework.batch.core.configuration.JobFactory;
 import org.springframework.batch.core.configuration.JobRegistry;
-import org.springframework.batch.core.configuration.annotation.BatchConfigurer;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.support.DefaultBatchConfiguration;
 import org.springframework.batch.core.configuration.support.JobRegistryBeanPostProcessor;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.batch.core.job.AbstractJob;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.TestAutoConfigurationPackage;
+import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration.SpringBootBatchConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.EmbeddedDataSourceConfiguration;
 import org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration;
+import org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.test.City;
 import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.jdbc.init.DataSourceScriptDatabaseInitializer;
+import org.springframework.boot.logging.LogLevel;
 import org.springframework.boot.sql.init.DatabaseInitializationMode;
 import org.springframework.boot.sql.init.DatabaseInitializationSettings;
-import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.boot.test.context.runner.ContextConsumer;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.init.DatabasePopulator;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -81,14 +90,17 @@ import static org.mockito.Mockito.mock;
  * @author Vedran Pavic
  * @author Kazuki Shimizu
  */
+@ExtendWith(OutputCaptureExtension.class)
 class BatchAutoConfigurationTests {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-			.withConfiguration(AutoConfigurations.of(BatchAutoConfiguration.class, TransactionAutoConfiguration.class));
+			.withConfiguration(AutoConfigurations.of(BatchAutoConfiguration.class, TransactionAutoConfiguration.class,
+					DataSourceTransactionManagerAutoConfiguration.class));
 
 	@Test
 	void testDefaultContext() {
-		this.contextRunner.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class)
+		this.contextRunner.withInitializer(ConditionEvaluationReportLoggingListener.forLogLevel(LogLevel.INFO))
+				.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class)
 				.run((context) -> {
 					assertThat(context).hasSingleBean(JobLauncher.class);
 					assertThat(context).hasSingleBean(JobExplorer.class);
@@ -100,24 +112,27 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Test
-	void whenThereIsNoDataSourceAutoConfigurationBacksOff() {
-		this.contextRunner.withUserConfiguration(TestConfiguration.class)
-				.run((context) -> assertThat(context).doesNotHaveBean(BatchConfigurer.class));
-	}
-
-	@Test
-	void whenThereIsAnEntityManagerFactoryButNoDataSourceAutoConfigurationBacksOff() {
-		this.contextRunner.withUserConfiguration(TestConfiguration.class, EntityManagerFactoryConfiguration.class)
-				.run((context) -> assertThat(context).doesNotHaveBean(BatchConfigurer.class));
-	}
-
-	@Test
-	void testNoBatchConfiguration() {
-		this.contextRunner.withUserConfiguration(EmptyConfiguration.class, EmbeddedDataSourceConfiguration.class)
-				.run((context) -> {
-					assertThat(context).doesNotHaveBean(JobLauncher.class);
-					assertThat(context).doesNotHaveBean(JobRepository.class);
+	void autoconfigurationBacksOffEntirelyIfSpringJdbcAbsent() {
+		this.contextRunner.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class)
+				.withClassLoader(new FilteredClassLoader(DatabasePopulator.class)).run((context) -> {
+					assertThat(context).doesNotHaveBean(JobLauncherApplicationRunner.class);
+					assertThat(context).doesNotHaveBean(BatchDataSourceScriptDatabaseInitializer.class);
 				});
+	}
+
+	@Test
+	void autoConfigurationBacksOffWhenUserEnablesBatchProcessing() {
+		this.contextRunner
+				.withUserConfiguration(EnableBatchProcessingConfiguration.class, EmbeddedDataSourceConfiguration.class)
+				.withClassLoader(new FilteredClassLoader(DatabasePopulator.class))
+				.run((context) -> assertThat(context).doesNotHaveBean(SpringBootBatchConfiguration.class));
+	}
+
+	@Test
+	void autoConfigurationBacksOffWhenUserProvidesBatchConfiguration() {
+		this.contextRunner.withUserConfiguration(CustomBatchConfiguration.class, EmbeddedDataSourceConfiguration.class)
+				.withClassLoader(new FilteredClassLoader(DatabasePopulator.class))
+				.run((context) -> assertThat(context).doesNotHaveBean(SpringBootBatchConfiguration.class));
 	}
 
 	@Test
@@ -149,11 +164,11 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Test
-	void testDefinesAndLaunchesNamedJob() {
+	void testDefinesAndLaunchesNamedRegisteredJob() {
 		this.contextRunner
 				.withUserConfiguration(NamedJobConfigurationWithRegisteredJob.class,
 						EmbeddedDataSourceConfiguration.class)
-				.withPropertyValues("spring.batch.job.names:discreteRegisteredJob").run((context) -> {
+				.withPropertyValues("spring.batch.job.name:discreteRegisteredJob").run((context) -> {
 					assertThat(context).hasSingleBean(JobLauncher.class);
 					context.getBean(JobLauncherApplicationRunner.class).run();
 					assertThat(context.getBean(JobRepository.class).getLastJobExecution("discreteRegisteredJob",
@@ -162,10 +177,45 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Test
+	void testRegisteredAndLocalJob() {
+		this.contextRunner
+				.withUserConfiguration(NamedJobConfigurationWithRegisteredAndLocalJob.class,
+						EmbeddedDataSourceConfiguration.class)
+				.withPropertyValues("spring.batch.job.name:discreteRegisteredJob").run((context) -> {
+					assertThat(context).hasSingleBean(JobLauncher.class);
+					context.getBean(JobLauncherApplicationRunner.class).run();
+					assertThat(context.getBean(JobRepository.class)
+							.getLastJobExecution("discreteRegisteredJob", new JobParameters()).getStatus())
+									.isEqualTo(BatchStatus.COMPLETED);
+				});
+	}
+
+	@Test
 	void testDefinesAndLaunchesLocalJob() {
 		this.contextRunner
 				.withUserConfiguration(NamedJobConfigurationWithLocalJob.class, EmbeddedDataSourceConfiguration.class)
-				.withPropertyValues("spring.batch.job.names:discreteLocalJob").run((context) -> {
+				.withPropertyValues("spring.batch.job.name:discreteLocalJob").run((context) -> {
+					assertThat(context).hasSingleBean(JobLauncher.class);
+					context.getBean(JobLauncherApplicationRunner.class).run();
+					assertThat(context.getBean(JobRepository.class).getLastJobExecution("discreteLocalJob",
+							new JobParameters())).isNotNull();
+				});
+	}
+
+	@Test
+	void testMultipleJobsAndNoJobName() {
+		this.contextRunner.withUserConfiguration(MultipleJobConfiguration.class, EmbeddedDataSourceConfiguration.class)
+				.run((context) -> {
+					assertThat(context).hasFailed();
+					assertThat(context.getStartupFailure().getCause().getMessage())
+							.contains("Job name must be specified in case of multiple jobs");
+				});
+	}
+
+	@Test
+	void testMultipleJobsAndJobName() {
+		this.contextRunner.withUserConfiguration(MultipleJobConfiguration.class, EmbeddedDataSourceConfiguration.class)
+				.withPropertyValues("spring.batch.job.name:discreteLocalJob").run((context) -> {
 					assertThat(context).hasSingleBean(JobLauncher.class);
 					context.getBean(JobLauncherApplicationRunner.class).run();
 					assertThat(context.getBean(JobRepository.class).getLastJobExecution("discreteLocalJob",
@@ -187,27 +237,15 @@ class BatchAutoConfigurationTests {
 		this.contextRunner.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class)
 				.withPropertyValues("spring.datasource.generate-unique-name=true",
 						"spring.batch.jdbc.initialize-schema:never")
-				.run(assertDatasourceIsNotInitialized());
-	}
-
-	@Test
-	@Deprecated
-	void testDisableSchemaLoaderWithDeprecatedProperty() {
-		this.contextRunner.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class)
-				.withPropertyValues("spring.datasource.generate-unique-name=true",
-						"spring.batch.initialize-schema:never")
-				.run(assertDatasourceIsNotInitialized());
-	}
-
-	private ContextConsumer<AssertableApplicationContext> assertDatasourceIsNotInitialized() {
-		return (context) -> {
-			assertThat(context).hasSingleBean(JobLauncher.class);
-			assertThat(context.getBean(BatchProperties.class).getJdbc().getInitializeSchema())
-					.isEqualTo(DatabaseInitializationMode.NEVER);
-			assertThatExceptionOfType(BadSqlGrammarException.class)
-					.isThrownBy(() -> new JdbcTemplate(context.getBean(DataSource.class))
-							.queryForList("select * from BATCH_JOB_EXECUTION"));
-		};
+				.run((context) -> {
+					assertThat(context).hasSingleBean(JobLauncher.class);
+					assertThat(context.getBean(BatchProperties.class).getJdbc().getInitializeSchema())
+							.isEqualTo(DatabaseInitializationMode.NEVER);
+					assertThat(context).doesNotHaveBean(BatchDataSourceScriptDatabaseInitializer.class);
+					assertThatExceptionOfType(BadSqlGrammarException.class)
+							.isThrownBy(() -> new JdbcTemplate(context.getBean(DataSource.class))
+									.queryForList("select * from BATCH_JOB_EXECUTION"));
+				});
 	}
 
 	@Test
@@ -232,35 +270,19 @@ class BatchAutoConfigurationTests {
 				.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class,
 						HibernateJpaAutoConfiguration.class)
 				.withPropertyValues("spring.datasource.generate-unique-name=true",
-						"spring.batch.jdbc.schema:classpath:batch/custom-schema-hsql.sql",
+						"spring.batch.jdbc.schema:classpath:batch/custom-schema.sql",
 						"spring.batch.jdbc.tablePrefix:PREFIX_")
-				.run(assertCustomTablePrefix());
-	}
-
-	@Test
-	@Deprecated
-	void testRenamePrefixWithDeprecatedProperty() {
-		this.contextRunner
-				.withUserConfiguration(TestConfiguration.class, EmbeddedDataSourceConfiguration.class,
-						HibernateJpaAutoConfiguration.class)
-				.withPropertyValues("spring.datasource.generate-unique-name=true",
-						"spring.batch.schema:classpath:batch/custom-schema-hsql.sql",
-						"spring.batch.tablePrefix:PREFIX_")
-				.run(assertCustomTablePrefix());
-	}
-
-	private ContextConsumer<AssertableApplicationContext> assertCustomTablePrefix() {
-		return (context) -> {
-			assertThat(context).hasSingleBean(JobLauncher.class);
-			assertThat(context.getBean(BatchProperties.class).getJdbc().getInitializeSchema())
-					.isEqualTo(DatabaseInitializationMode.EMBEDDED);
-			assertThat(new JdbcTemplate(context.getBean(DataSource.class))
-					.queryForList("select * from PREFIX_JOB_EXECUTION")).isEmpty();
-			JobExplorer jobExplorer = context.getBean(JobExplorer.class);
-			assertThat(jobExplorer.findRunningJobExecutions("test")).isEmpty();
-			JobRepository jobRepository = context.getBean(JobRepository.class);
-			assertThat(jobRepository.getLastJobExecution("test", new JobParameters())).isNull();
-		};
+				.run((context) -> {
+					assertThat(context).hasSingleBean(JobLauncher.class);
+					assertThat(context.getBean(BatchProperties.class).getJdbc().getInitializeSchema())
+							.isEqualTo(DatabaseInitializationMode.EMBEDDED);
+					assertThat(new JdbcTemplate(context.getBean(DataSource.class))
+							.queryForList("select * from PREFIX_JOB_EXECUTION")).isEmpty();
+					JobExplorer jobExplorer = context.getBean(JobExplorer.class);
+					assertThat(jobExplorer.findRunningJobExecutions("test")).isEmpty();
+					JobRepository jobRepository = context.getBean(JobRepository.class);
+					assertThat(jobRepository.getLastJobExecution("test", new JobParameters())).isNull();
+				});
 	}
 
 	@Test
@@ -271,9 +293,9 @@ class BatchAutoConfigurationTests {
 				.withPropertyValues("spring.transaction.default-timeout:30",
 						"spring.transaction.rollback-on-commit-failure:true")
 				.run((context) -> {
-					assertThat(context).hasSingleBean(BatchConfigurer.class);
+					assertThat(context).hasSingleBean(BatchAutoConfiguration.class);
 					JpaTransactionManager transactionManager = JpaTransactionManager.class
-							.cast(context.getBean(BatchConfigurer.class).getTransactionManager());
+							.cast(context.getBean(SpringBootBatchConfiguration.class).getTransactionManager());
 					assertThat(transactionManager.getDefaultTimeout()).isEqualTo(30);
 					assertThat(transactionManager.isRollbackOnCommitFailure()).isTrue();
 				});
@@ -285,9 +307,9 @@ class BatchAutoConfigurationTests {
 				.withPropertyValues("spring.transaction.default-timeout:30",
 						"spring.transaction.rollback-on-commit-failure:true")
 				.run((context) -> {
-					assertThat(context).hasSingleBean(BatchConfigurer.class);
+					assertThat(context).hasSingleBean(SpringBootBatchConfiguration.class);
 					DataSourceTransactionManager transactionManager = DataSourceTransactionManager.class
-							.cast(context.getBean(BatchConfigurer.class).getTransactionManager());
+							.cast(context.getBean(SpringBootBatchConfiguration.class).getTransactionManager());
 					assertThat(transactionManager.getDefaultTimeout()).isEqualTo(30);
 					assertThat(transactionManager.isRollbackOnCommitFailure()).isTrue();
 				});
@@ -297,11 +319,11 @@ class BatchAutoConfigurationTests {
 	void testBatchDataSource() {
 		this.contextRunner.withUserConfiguration(TestConfiguration.class, BatchDataSourceConfiguration.class)
 				.run((context) -> {
-					assertThat(context).hasSingleBean(BatchConfigurer.class)
+					assertThat(context).hasSingleBean(SpringBootBatchConfiguration.class)
 							.hasSingleBean(BatchDataSourceScriptDatabaseInitializer.class).hasBean("batchDataSource");
 					DataSource batchDataSource = context.getBean("batchDataSource", DataSource.class);
-					assertThat(context.getBean(BatchConfigurer.class)).hasFieldOrPropertyWithValue("dataSource",
-							batchDataSource);
+					assertThat(context.getBean(SpringBootBatchConfiguration.class).getDataSource())
+							.isEqualTo(batchDataSource);
 					assertThat(context.getBean(BatchDataSourceScriptDatabaseInitializer.class))
 							.hasFieldOrPropertyWithValue("dataSource", batchDataSource);
 				});
@@ -362,18 +384,6 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Test
-	@Deprecated
-	@SuppressWarnings("deprecation")
-	void whenTheUserDefinesTheirOwnBatchDataSourceInitializerThenTheAutoConfiguredInitializerBacksOff() {
-		this.contextRunner
-				.withUserConfiguration(TestConfiguration.class, CustomBatchDataSourceInitializerConfiguration.class)
-				.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class,
-						DataSourceTransactionManagerAutoConfiguration.class))
-				.run((context) -> assertThat(context).doesNotHaveBean(BatchDataSourceScriptDatabaseInitializer.class)
-						.hasSingleBean(BatchDataSourceInitializer.class).hasBean("customInitializer"));
-	}
-
-	@Test
 	void whenTheUserDefinesTheirOwnDatabaseInitializerThenTheAutoConfiguredBatchInitializerRemains() {
 		this.contextRunner.withUserConfiguration(TestConfiguration.class, CustomDatabaseInitializerConfiguration.class)
 				.withConfiguration(AutoConfigurations.of(DataSourceAutoConfiguration.class,
@@ -404,7 +414,6 @@ class BatchAutoConfigurationTests {
 
 	}
 
-	@EnableBatchProcessing
 	@TestAutoConfigurationPackage(City.class)
 	static class TestConfiguration {
 
@@ -421,25 +430,23 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@EnableBatchProcessing
-	static class NamedJobConfigurationWithRegisteredJob {
-
-		@Autowired
-		private JobRegistry jobRegistry;
+	static class NamedJobConfigurationWithRegisteredAndLocalJob {
 
 		@Autowired
 		private JobRepository jobRepository;
 
 		@Bean
-		JobRegistryBeanPostProcessor registryProcessor() {
+		static JobRegistryBeanPostProcessor registryProcessor(JobRegistry jobRegistry) {
 			JobRegistryBeanPostProcessor processor = new JobRegistryBeanPostProcessor();
-			processor.setJobRegistry(this.jobRegistry);
+			processor.setJobRegistry(jobRegistry);
 			return processor;
 		}
 
 		@Bean
 		Job discreteJob() {
 			AbstractJob job = new AbstractJob("discreteRegisteredJob") {
+
+				private static int count = 0;
 
 				@Override
 				public Collection<String> getStepNames() {
@@ -453,7 +460,13 @@ class BatchAutoConfigurationTests {
 
 				@Override
 				protected void doExecute(JobExecution execution) {
-					execution.setStatus(BatchStatus.COMPLETED);
+					if (count == 0) {
+						execution.setStatus(BatchStatus.COMPLETED);
+					}
+					else {
+						execution.setStatus(BatchStatus.FAILED);
+					}
+					count++;
 				}
 			};
 			job.setJobRepository(this.jobRepository);
@@ -463,7 +476,74 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@EnableBatchProcessing
+	static class NamedJobConfigurationWithRegisteredJob {
+
+		@Bean
+		static BeanPostProcessor registryProcessor(ApplicationContext applicationContext) {
+			return new NamedJobJobRegistryBeanPostProcessor(applicationContext);
+		}
+
+	}
+
+	static class NamedJobJobRegistryBeanPostProcessor implements BeanPostProcessor {
+
+		private final ApplicationContext applicationContext;
+
+		NamedJobJobRegistryBeanPostProcessor(ApplicationContext applicationContext) {
+			this.applicationContext = applicationContext;
+		}
+
+		@Override
+		public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+			if (bean instanceof JobRegistry jobRegistry) {
+				try {
+					jobRegistry.register(getJobFactory());
+				}
+				catch (DuplicateJobException ex) {
+				}
+			}
+			return bean;
+		}
+
+		private JobFactory getJobFactory() {
+			JobRepository jobRepository = this.applicationContext.getBean(JobRepository.class);
+			return new JobFactory() {
+
+				@Override
+				public Job createJob() {
+					AbstractJob job = new AbstractJob("discreteRegisteredJob") {
+
+						@Override
+						public Collection<String> getStepNames() {
+							return Collections.emptySet();
+						}
+
+						@Override
+						public Step getStep(String stepName) {
+							return null;
+						}
+
+						@Override
+						protected void doExecute(JobExecution execution) {
+							execution.setStatus(BatchStatus.COMPLETED);
+						}
+
+					};
+					job.setJobRepository(jobRepository);
+					return job;
+				}
+
+				@Override
+				public String getJobName() {
+					return "discreteRegisteredJob";
+				}
+
+			};
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
 	static class NamedJobConfigurationWithLocalJob {
 
 		@Autowired
@@ -495,7 +575,42 @@ class BatchAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@EnableBatchProcessing
+	static class MultipleJobConfiguration {
+
+		@Autowired
+		private JobRepository jobRepository;
+
+		@Bean
+		Job discreteJob() {
+			AbstractJob job = new AbstractJob("discreteLocalJob") {
+
+				@Override
+				public Collection<String> getStepNames() {
+					return Collections.emptySet();
+				}
+
+				@Override
+				public Step getStep(String stepName) {
+					return null;
+				}
+
+				@Override
+				protected void doExecute(JobExecution execution) {
+					execution.setStatus(BatchStatus.COMPLETED);
+				}
+			};
+			job.setJobRepository(this.jobRepository);
+			return job;
+		}
+
+		@Bean
+		Job job2() {
+			return mock(Job.class);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
 	static class JobConfiguration {
 
 		@Autowired
@@ -546,15 +661,14 @@ class BatchAutoConfigurationTests {
 
 	}
 
-	@Deprecated
 	@Configuration(proxyBeanMethods = false)
-	static class CustomBatchDataSourceInitializerConfiguration {
+	static class CustomBatchConfiguration extends DefaultBatchConfiguration {
 
-		@Bean
-		BatchDataSourceInitializer customInitializer(DataSource dataSource, ResourceLoader resourceLoader,
-				BatchProperties properties) {
-			return new BatchDataSourceInitializer(dataSource, resourceLoader, properties);
-		}
+	}
+
+	@EnableBatchProcessing
+	@Configuration(proxyBeanMethods = false)
+	static class EnableBatchProcessingConfiguration {
 
 	}
 

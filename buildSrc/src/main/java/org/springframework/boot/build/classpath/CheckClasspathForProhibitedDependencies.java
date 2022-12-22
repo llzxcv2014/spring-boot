@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.springframework.boot.build.classpath;
 
-import java.io.IOException;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -52,7 +51,7 @@ public class CheckClasspathForProhibitedDependencies extends DefaultTask {
 	}
 
 	@TaskAction
-	public void checkForProhibitedDependencies() throws IOException {
+	public void checkForProhibitedDependencies() {
 		TreeSet<String> prohibited = this.classpath.getResolvedConfiguration().getResolvedArtifacts().stream()
 				.map((artifact) -> artifact.getModuleVersion().getId()).filter(this::prohibited)
 				.map((id) -> id.getGroup() + ":" + id.getName()).collect(Collectors.toCollection(TreeSet::new));
@@ -70,6 +69,18 @@ public class CheckClasspathForProhibitedDependencies extends DefaultTask {
 		if (group.equals("javax.batch")) {
 			return false;
 		}
+		if (group.equals("javax.cache")) {
+			return false;
+		}
+		if (group.equals("javax.money")) {
+			return false;
+		}
+		if (group.equals("org.codehaus.groovy")) {
+			return true;
+		}
+		if (group.equals("org.eclipse.jetty.toolchain")) {
+			return true;
+		}
 		if (group.startsWith("javax")) {
 			return true;
 		}
@@ -77,6 +88,15 @@ public class CheckClasspathForProhibitedDependencies extends DefaultTask {
 			return true;
 		}
 		if (group.equals("org.slf4j") && id.getName().equals("jcl-over-slf4j")) {
+			return true;
+		}
+		if (group.startsWith("org.jboss.spec")) {
+			return true;
+		}
+		if (group.equals("org.apache.geronimo.specs")) {
+			return true;
+		}
+		if (group.equals("com.sun.activation")) {
 			return true;
 		}
 		return false;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @author Stephane Nicoll
  * @since 1.0.0
  */
-@ConfigurationProperties(prefix = "spring.redis")
+@ConfigurationProperties(prefix = "spring.data.redis")
 public class RedisProperties {
 
 	/**
@@ -235,7 +235,8 @@ public class RedisProperties {
 
 		/**
 		 * Whether to enable the pool. Enabled automatically if "commons-pool2" is
-		 * available.
+		 * available. With Jedis, pooling is implicitly enabled in sentinel mode and this
+		 * setting only applies to single node setup.
 		 */
 		private Boolean enabled;
 
@@ -372,6 +373,11 @@ public class RedisProperties {
 		private List<String> nodes;
 
 		/**
+		 * Login username for authenticating with sentinel(s).
+		 */
+		private String username;
+
+		/**
 		 * Password for authenticating with sentinel(s).
 		 */
 		private String password;
@@ -390,6 +396,14 @@ public class RedisProperties {
 
 		public void setNodes(List<String> nodes) {
 			this.nodes = nodes;
+		}
+
+		public String getUsername() {
+			return this.username;
+		}
+
+		public void setUsername(String username) {
+			this.username = username;
 		}
 
 		public String getPassword() {

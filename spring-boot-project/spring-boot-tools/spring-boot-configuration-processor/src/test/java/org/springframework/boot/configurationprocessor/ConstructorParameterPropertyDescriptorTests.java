@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@
 
 package org.springframework.boot.configurationprocessor;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -45,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTests {
 
 	@Test
-	void constructorParameterSimpleProperty() throws IOException {
+	void constructorParameterSimpleProperty() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "theName");
@@ -58,7 +56,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterNestedPropertySameClass() throws IOException {
+	void constructorParameterNestedPropertySameClass() {
 		process(ImmutableInnerClassProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableInnerClassProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "first");
@@ -71,7 +69,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterNestedPropertyWithAnnotation() throws IOException {
+	void constructorParameterNestedPropertyWithAnnotation() {
 		process(ImmutableInnerClassProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableInnerClassProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "third");
@@ -84,7 +82,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterSimplePropertyWithNoAccessorShouldBeExposed() throws IOException {
+	void constructorParameterSimplePropertyWithNoAccessorShouldBeExposed() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "counter");
@@ -97,7 +95,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterMetadataSimpleProperty() throws IOException {
+	void constructorParameterMetadataSimpleProperty() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "counter");
@@ -107,7 +105,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterMetadataNestedGroup() throws IOException {
+	void constructorParameterMetadataNestedGroup() {
 		process(ImmutableInnerClassProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableInnerClassProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "first");
@@ -119,7 +117,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterDeprecatedPropertyOnGetter() throws IOException {
+	void constructorParameterDeprecatedPropertyOnGetter() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ExecutableElement getter = getMethod(ownerElement, "isFlag");
@@ -132,7 +130,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterPropertyWithDescription() throws IOException {
+	void constructorParameterPropertyWithDescription() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "theName");
@@ -142,7 +140,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterPropertyWithDefaultValue() throws IOException {
+	void constructorParameterPropertyWithDefaultValue() {
 		process(ImmutableSimpleProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableSimpleProperties.class);
 			ConstructorParameterPropertyDescriptor property = createPropertyDescriptor(ownerElement, "theName");
@@ -151,52 +149,57 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 	}
 
 	@Test
-	void constructorParameterPropertyWithPrimitiveTypes() throws IOException {
+	void constructorParameterPropertyWithPrimitiveTypes() {
 		process(ImmutablePrimitiveProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutablePrimitiveProperties.class);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "flag")).hasDefaultValue(false);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet")).hasDefaultValue(0);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet")).hasDefaultValue((byte) 0);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "letter")).hasDefaultValue(null);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number")).hasDefaultValue(0);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number"))
+					.hasDefaultValue((short) 0);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "counter")).hasDefaultValue(0);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "value")).hasDefaultValue(0L);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0F);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "ratio")).hasDefaultValue(0D);
 		});
 	}
 
 	@Test
-	void constructorParameterPropertyWithPrimitiveTypesAndDefaultValues() throws IOException {
+	void constructorParameterPropertyWithPrimitiveTypesAndDefaultValues() {
 		process(ImmutablePrimitiveWithDefaultsProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutablePrimitiveWithDefaultsProperties.class);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "flag")).hasDefaultValue(true);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet")).hasDefaultValue(120);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet"))
+					.hasDefaultValue((byte) 120);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "letter")).hasDefaultValue("a");
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number")).hasDefaultValue(1000);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number"))
+					.hasDefaultValue((short) 1000);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "counter")).hasDefaultValue(42);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "value")).hasDefaultValue(2000);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0.5);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "value")).hasDefaultValue(2000L);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0.5F);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "ratio")).hasDefaultValue(42.42);
 		});
 	}
 
 	@Test
-	void constructorParameterPropertyWithPrimitiveWrapperTypesAndDefaultValues() throws IOException {
+	void constructorParameterPropertyWithPrimitiveWrapperTypesAndDefaultValues() {
 		process(ImmutablePrimitiveWrapperWithDefaultsProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutablePrimitiveWrapperWithDefaultsProperties.class);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "flag")).hasDefaultValue(true);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet")).hasDefaultValue(120);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "octet"))
+					.hasDefaultValue((byte) 120);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "letter")).hasDefaultValue("a");
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number")).hasDefaultValue(1000);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "number"))
+					.hasDefaultValue((short) 1000);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "counter")).hasDefaultValue(42);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "value")).hasDefaultValue(2000);
-			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0.5);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "value")).hasDefaultValue(2000L);
+			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "percentage")).hasDefaultValue(0.5F);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "ratio")).hasDefaultValue(42.42);
 		});
 	}
 
 	@Test
-	void constructorParameterPropertyWithCollectionTypesAndDefaultValues() throws IOException {
+	void constructorParameterPropertyWithCollectionTypesAndDefaultValues() {
 		process(ImmutableCollectionProperties.class, (roundEnv, metadataEnv) -> {
 			TypeElement ownerElement = roundEnv.getRootElement(ImmutableCollectionProperties.class);
 			assertItemMetadata(metadataEnv, createPropertyDescriptor(ownerElement, "names")).hasDefaultValue(null);
@@ -218,7 +221,7 @@ class ConstructorParameterPropertyDescriptorTests extends PropertyDescriptorTest
 
 	private VariableElement getConstructorParameter(TypeElement ownerElement, String name) {
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(ownerElement.getEnclosedElements()).stream()
-				.filter((constructor) -> !constructor.getParameters().isEmpty()).collect(Collectors.toList());
+				.filter((constructor) -> !constructor.getParameters().isEmpty()).toList();
 		if (constructors.size() != 1) {
 			throw new IllegalStateException("No candidate constructor for " + ownerElement);
 		}

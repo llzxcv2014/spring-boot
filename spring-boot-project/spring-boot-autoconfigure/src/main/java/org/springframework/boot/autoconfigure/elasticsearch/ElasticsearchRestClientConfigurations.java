@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+import org.apache.http.impl.nio.reactor.IOReactorConfig;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
-import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.sniff.Sniffer;
 import org.elasticsearch.client.sniff.SnifferBuilder;
 
@@ -46,6 +46,7 @@ import org.springframework.util.StringUtils;
  * Elasticsearch rest client configurations.
  *
  * @author Stephane Nicoll
+ * @author Filip Hrisafov
  */
 class ElasticsearchRestClientConfigurations {
 
@@ -53,15 +54,21 @@ class ElasticsearchRestClientConfigurations {
 	@ConditionalOnMissingBean(RestClientBuilder.class)
 	static class RestClientBuilderConfiguration {
 
-		@Bean
-		RestClientBuilderCustomizer defaultRestClientBuilderCustomizer(ElasticsearchRestClientProperties properties) {
-			return new DefaultRestClientBuilderCustomizer(properties);
+		private final ElasticsearchProperties properties;
+
+		RestClientBuilderConfiguration(ElasticsearchProperties properties) {
+			this.properties = properties;
 		}
 
 		@Bean
-		RestClientBuilder elasticsearchRestClientBuilder(ElasticsearchRestClientProperties properties,
+		RestClientBuilderCustomizer defaultRestClientBuilderCustomizer() {
+			return new DefaultRestClientBuilderCustomizer(this.properties);
+		}
+
+		@Bean
+		RestClientBuilder elasticsearchRestClientBuilder(
 				ObjectProvider<RestClientBuilderCustomizer> builderCustomizers) {
-			HttpHost[] hosts = properties.getUris().stream().map(this::createHttpHost).toArray(HttpHost[]::new);
+			HttpHost[] hosts = this.properties.getUris().stream().map(this::createHttpHost).toArray(HttpHost[]::new);
 			RestClientBuilder builder = RestClient.builder(hosts);
 			builder.setHttpClientConfigCallback((httpClientBuilder) -> {
 				builderCustomizers.orderedStream().forEach((customizer) -> customizer.customize(httpClientBuilder));
@@ -71,6 +78,9 @@ class ElasticsearchRestClientConfigurations {
 				builderCustomizers.orderedStream().forEach((customizer) -> customizer.customize(requestConfigBuilder));
 				return requestConfigBuilder;
 			});
+			if (this.properties.getPathPrefix() != null) {
+				builder.setPathPrefix(this.properties.getPathPrefix());
+			}
 			builderCustomizers.orderedStream().forEach((customizer) -> customizer.customize(builder));
 			return builder;
 		}
@@ -100,30 +110,30 @@ class ElasticsearchRestClientConfigurations {
 	}
 
 	@Configuration(proxyBeanMethods = false)
-	@ConditionalOnMissingBean(RestHighLevelClient.class)
-	static class RestHighLevelClientConfiguration {
+	@ConditionalOnMissingBean(RestClient.class)
+	static class RestClientConfiguration {
 
 		@Bean
-		RestHighLevelClient elasticsearchRestHighLevelClient(RestClientBuilder restClientBuilder) {
-			return new RestHighLevelClient(restClientBuilder);
+		RestClient elasticsearchRestClient(RestClientBuilder restClientBuilder) {
+			return restClientBuilder.build();
 		}
 
 	}
 
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnClass(Sniffer.class)
-	@ConditionalOnSingleCandidate(RestHighLevelClient.class)
+	@ConditionalOnSingleCandidate(RestClient.class)
 	static class RestClientSnifferConfiguration {
 
 		@Bean
 		@ConditionalOnMissingBean
-		Sniffer elasticsearchSniffer(RestHighLevelClient client, ElasticsearchRestClientProperties properties) {
-			SnifferBuilder builder = Sniffer.builder(client.getLowLevelClient());
+		Sniffer elasticsearchSniffer(RestClient client, ElasticsearchProperties properties) {
+			SnifferBuilder builder = Sniffer.builder(client);
 			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
-			map.from(properties.getSniffer().getInterval()).asInt(Duration::toMillis)
-					.to(builder::setSniffIntervalMillis);
-			map.from(properties.getSniffer().getDelayAfterFailure()).asInt(Duration::toMillis)
-					.to(builder::setSniffAfterFailureDelayMillis);
+			Duration interval = properties.getRestclient().getSniffer().getInterval();
+			map.from(interval).asInt(Duration::toMillis).to(builder::setSniffIntervalMillis);
+			Duration delayAfterFailure = properties.getRestclient().getSniffer().getDelayAfterFailure();
+			map.from(delayAfterFailure).asInt(Duration::toMillis).to(builder::setSniffAfterFailureDelayMillis);
 			return builder.build();
 		}
 
@@ -133,9 +143,9 @@ class ElasticsearchRestClientConfigurations {
 
 		private static final PropertyMapper map = PropertyMapper.get();
 
-		private final ElasticsearchRestClientProperties properties;
+		private final ElasticsearchProperties properties;
 
-		DefaultRestClientBuilderCustomizer(ElasticsearchRestClientProperties properties) {
+		DefaultRestClientBuilderCustomizer(ElasticsearchProperties properties) {
 			this.properties = properties;
 		}
 
@@ -146,13 +156,15 @@ class ElasticsearchRestClientConfigurations {
 		@Override
 		public void customize(HttpAsyncClientBuilder builder) {
 			builder.setDefaultCredentialsProvider(new PropertiesCredentialsProvider(this.properties));
+			map.from(this.properties::isSocketKeepAlive).to((keepAlive) -> builder
+					.setDefaultIOReactorConfig(IOReactorConfig.custom().setSoKeepAlive(keepAlive).build()));
 		}
 
 		@Override
 		public void customize(RequestConfig.Builder builder) {
 			map.from(this.properties::getConnectionTimeout).whenNonNull().asInt(Duration::toMillis)
 					.to(builder::setConnectTimeout);
-			map.from(this.properties::getReadTimeout).whenNonNull().asInt(Duration::toMillis)
+			map.from(this.properties::getSocketTimeout).whenNonNull().asInt(Duration::toMillis)
 					.to(builder::setSocketTimeout);
 		}
 
@@ -160,7 +172,7 @@ class ElasticsearchRestClientConfigurations {
 
 	private static class PropertiesCredentialsProvider extends BasicCredentialsProvider {
 
-		PropertiesCredentialsProvider(ElasticsearchRestClientProperties properties) {
+		PropertiesCredentialsProvider(ElasticsearchProperties properties) {
 			if (StringUtils.hasText(properties.getUsername())) {
 				Credentials credentials = new UsernamePasswordCredentials(properties.getUsername(),
 						properties.getPassword());

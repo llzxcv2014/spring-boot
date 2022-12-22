@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.aot.AotDetector;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -33,12 +34,13 @@ import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
-import org.springframework.boot.util.Instantiator;
+import org.springframework.context.EnvironmentAware;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.ImportBeanDefinitionRegistrar;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.support.SpringFactoriesLoader;
+import org.springframework.core.io.support.SpringFactoriesLoader.ArgumentResolver;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -63,36 +65,27 @@ import org.springframework.util.StringUtils;
  */
 public class DatabaseInitializationDependencyConfigurer implements ImportBeanDefinitionRegistrar {
 
-	private final Environment environment;
-
-	DatabaseInitializationDependencyConfigurer(Environment environment) {
-		this.environment = environment;
-	}
-
 	@Override
 	public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
 		String name = DependsOnDatabaseInitializationPostProcessor.class.getName();
 		if (!registry.containsBeanDefinition(name)) {
-			BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(
-					DependsOnDatabaseInitializationPostProcessor.class,
-					this::createDependsOnDatabaseInitializationPostProcessor);
+			BeanDefinitionBuilder builder = BeanDefinitionBuilder
+					.rootBeanDefinition(DependsOnDatabaseInitializationPostProcessor.class);
 			registry.registerBeanDefinition(name, builder.getBeanDefinition());
 		}
-	}
-
-	private DependsOnDatabaseInitializationPostProcessor createDependsOnDatabaseInitializationPostProcessor() {
-		return new DependsOnDatabaseInitializationPostProcessor(this.environment);
 	}
 
 	/**
 	 * {@link BeanFactoryPostProcessor} used to configure database initialization
 	 * dependency relationships.
 	 */
-	static class DependsOnDatabaseInitializationPostProcessor implements BeanFactoryPostProcessor, Ordered {
+	static class DependsOnDatabaseInitializationPostProcessor
+			implements BeanFactoryPostProcessor, EnvironmentAware, Ordered {
 
-		private final Environment environment;
+		private Environment environment;
 
-		DependsOnDatabaseInitializationPostProcessor(Environment environment) {
+		@Override
+		public void setEnvironment(Environment environment) {
 			this.environment = environment;
 		}
 
@@ -103,6 +96,9 @@ public class DatabaseInitializationDependencyConfigurer implements ImportBeanDef
 
 		@Override
 		public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+			if (AotDetector.useGeneratedArtifacts()) {
+				return;
+			}
 			InitializerBeanNames initializerBeanNames = detectInitializerBeanNames(beanFactory);
 			if (initializerBeanNames.isEmpty()) {
 				return;
@@ -159,10 +155,9 @@ public class DatabaseInitializationDependencyConfigurer implements ImportBeanDef
 		}
 
 		private <T> List<T> getDetectors(ConfigurableListableBeanFactory beanFactory, Class<T> type) {
-			List<String> names = SpringFactoriesLoader.loadFactoryNames(type, beanFactory.getBeanClassLoader());
-			Instantiator<T> instantiator = new Instantiator<>(type,
-					(availableParameters) -> availableParameters.add(Environment.class, this.environment));
-			return instantiator.instantiate(beanFactory.getBeanClassLoader(), names);
+			ArgumentResolver argumentResolver = ArgumentResolver.of(Environment.class, this.environment);
+			return SpringFactoriesLoader.forDefaultResourceLocation(beanFactory.getBeanClassLoader()).load(type,
+					argumentResolver);
 		}
 
 		private static BeanDefinition getBeanDefinition(String beanName, ConfigurableListableBeanFactory beanFactory) {
@@ -171,8 +166,8 @@ public class DatabaseInitializationDependencyConfigurer implements ImportBeanDef
 			}
 			catch (NoSuchBeanDefinitionException ex) {
 				BeanFactory parentBeanFactory = beanFactory.getParentBeanFactory();
-				if (parentBeanFactory instanceof ConfigurableListableBeanFactory) {
-					return getBeanDefinition(beanName, (ConfigurableListableBeanFactory) parentBeanFactory);
+				if (parentBeanFactory instanceof ConfigurableListableBeanFactory configurableBeanFactory) {
+					return getBeanDefinition(beanName, configurableBeanFactory);
 				}
 				throw ex;
 			}

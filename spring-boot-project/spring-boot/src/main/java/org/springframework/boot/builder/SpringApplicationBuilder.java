@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,20 +103,6 @@ public class SpringApplicationBuilder {
 	}
 
 	/**
-	 * Creates a new {@link SpringApplication} instance from the given sources. Subclasses
-	 * may override in order to provide a custom subclass of {@link SpringApplication}.
-	 * @param sources the sources
-	 * @return the {@link SpringApplication} instance
-	 * @since 1.1.0
-	 * @deprecated since 2.6.0 for removal in 2.8.0 in favor of
-	 * {@link #createSpringApplication(ResourceLoader, Class...)}
-	 */
-	@Deprecated
-	protected SpringApplication createSpringApplication(Class<?>... sources) {
-		return new SpringApplication(sources);
-	}
-
-	/**
 	 * Creates a new {@link SpringApplication} instance from the given sources using the
 	 * given {@link ResourceLoader}. Subclasses may override in order to provide a custom
 	 * subclass of {@link SpringApplication}.
@@ -147,8 +133,8 @@ public class SpringApplicationBuilder {
 
 	/**
 	 * Create an application context (and its parent if specified) with the command line
-	 * args provided. The parent is run first with the same arguments if has not yet been
-	 * started.
+	 * args provided. The parent is run first with the same arguments if it has not yet
+	 * been started.
 	 * @param args the command line arguments
 	 * @return an application context created from the current state
 	 */
@@ -604,7 +590,7 @@ public class SpringApplicationBuilder {
 	/**
 	 * Whether to allow circular references between beans and automatically try to resolve
 	 * them.
-	 * @param allowCircularReferences whether circular references are allows
+	 * @param allowCircularReferences whether circular references are allowed
 	 * @return the current builder
 	 * @since 2.6.0
 	 * @see AbstractAutowireCapableBeanFactory#setAllowCircularReferences(boolean)

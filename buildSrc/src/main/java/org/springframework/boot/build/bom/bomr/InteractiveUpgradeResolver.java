@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.gradle.api.InvalidUserDataException;
@@ -64,14 +65,13 @@ public final class InteractiveUpgradeResolver implements UpgradeResolver {
 	}
 
 	@Override
-	public List<Upgrade> resolveUpgrades(Collection<Library> libraries) {
+	public List<Upgrade> resolveUpgrades(Collection<Library> librariesToUpgrade, Collection<Library> libraries) {
 		Map<String, Library> librariesByName = new HashMap<>();
 		for (Library library : libraries) {
 			librariesByName.put(library.getName(), library);
 		}
-		return libraries.stream().filter((library) -> !library.getName().equals("Spring Boot"))
-				.map((library) -> resolveUpgrade(library, librariesByName)).filter((upgrade) -> upgrade != null)
-				.collect(Collectors.toList());
+		return librariesToUpgrade.stream().filter((library) -> !library.getName().equals("Spring Boot"))
+				.map((library) -> resolveUpgrade(library, librariesByName)).filter(Objects::nonNull).toList();
 	}
 
 	private Upgrade resolveUpgrade(Library library, Map<String, Library> libraries) {
@@ -111,13 +111,13 @@ public final class InteractiveUpgradeResolver implements UpgradeResolver {
 		}
 		List<DependencyVersion> allVersions = moduleVersions.values().stream().flatMap(SortedSet::stream).distinct()
 				.filter((dependencyVersion) -> isPermitted(dependencyVersion, library.getProhibitedVersions()))
-				.collect(Collectors.toList());
+				.toList();
 		if (allVersions.isEmpty()) {
 			return Collections.emptyList();
 		}
-		return allVersions.stream()
-				.map((version) -> new ResolvedVersionOption(version, getMissingModules(moduleVersions, version)))
-				.collect(Collectors.toList());
+		Stream<VersionOption> resolvedVersionOptions = allVersions.stream()
+				.map((version) -> new ResolvedVersionOption(version, getMissingModules(moduleVersions, version)));
+		return resolvedVersionOptions.toList();
 	}
 
 	private List<VersionOption> determineAlignedVersionOption(Library library, Map<String, Library> libraries) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,14 @@ import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.invoke.OperationInvoker;
 import org.springframework.boot.actuate.endpoint.invoke.OperationParameters;
 import org.springframework.boot.actuate.endpoint.invoke.reflect.OperationMethod;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.lang.Nullable;
 import org.springframework.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.then;
 
 /**
  * Tests for {@link CachingOperationInvokerAdvisor}.
@@ -85,7 +86,7 @@ class CachingOperationInvokerAdvisorTests {
 		OperationInvoker advised = this.advisor.apply(EndpointId.of("foo"), OperationType.READ, parameters,
 				this.invoker);
 		assertThat(advised).isSameAs(this.invoker);
-		verify(this.timeToLive).apply(EndpointId.of("foo"));
+		then(this.timeToLive).should().apply(EndpointId.of("foo"));
 	}
 
 	@Test
@@ -95,7 +96,7 @@ class CachingOperationInvokerAdvisorTests {
 		OperationInvoker advised = this.advisor.apply(EndpointId.of("foo"), OperationType.READ, parameters,
 				this.invoker);
 		assertThat(advised).isSameAs(this.invoker);
-		verify(this.timeToLive).apply(EndpointId.of("foo"));
+		then(this.timeToLive).should().apply(EndpointId.of("foo"));
 	}
 
 	@Test
@@ -124,6 +125,23 @@ class CachingOperationInvokerAdvisorTests {
 		OperationParameters parameters = getParameters("getWithApiVersion", ApiVersion.class, String.class);
 		given(this.timeToLive.apply(any())).willReturn(100L);
 		assertAdviseIsApplied(parameters);
+	}
+
+	@Test
+	void applyWithWebServerNamespaceShouldAddAdvise() {
+		OperationParameters parameters = getParameters("getWithServerNamespace", WebServerNamespace.class,
+				String.class);
+		given(this.timeToLive.apply(any())).willReturn(100L);
+		assertAdviseIsApplied(parameters);
+	}
+
+	@Test
+	void applyWithMandatoryCachedAndNonCachedShouldAddAdvise() {
+		OperationParameters parameters = getParameters("getWithServerNamespaceAndOtherMandatory",
+				WebServerNamespace.class, String.class);
+		OperationInvoker advised = this.advisor.apply(EndpointId.of("foo"), OperationType.READ, parameters,
+				this.invoker);
+		assertThat(advised).isSameAs(this.invoker);
 	}
 
 	private void assertAdviseIsApplied(OperationParameters parameters) {
@@ -162,6 +180,14 @@ class CachingOperationInvokerAdvisorTests {
 		}
 
 		String getWithApiVersion(ApiVersion apiVersion, @Nullable String bar) {
+			return "";
+		}
+
+		String getWithServerNamespace(WebServerNamespace serverNamespace, @Nullable String bar) {
+			return "";
+		}
+
+		String getWithServerNamespaceAndOtherMandatory(WebServerNamespace serverNamespace, String bar) {
 			return "";
 		}
 

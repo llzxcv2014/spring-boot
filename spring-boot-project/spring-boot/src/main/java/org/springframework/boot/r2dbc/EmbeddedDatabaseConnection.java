@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
 
 /**
- * Connection details for embedded databases compatible with r2dbc.
+ * Connection details for embedded databases compatible with R2DBC.
  *
  * @author Mark Paluch
  * @author Stephane Nicoll
@@ -49,7 +49,7 @@ public enum EmbeddedDatabaseConnection {
 
 	private final String url;
 
-	private Predicate<ConnectionFactoryOptions> embedded;
+	private final Predicate<ConnectionFactoryOptions> embedded;
 
 	EmbeddedDatabaseConnection(String driverClassName, String url, Predicate<ConnectionFactoryOptions> embedded) {
 		this.driverClassName = driverClassName;
@@ -99,12 +99,10 @@ public enum EmbeddedDatabaseConnection {
 	 */
 	public static boolean isEmbedded(ConnectionFactory connectionFactory) {
 		OptionsCapableConnectionFactory optionsCapable = OptionsCapableConnectionFactory.unwrapFrom(connectionFactory);
-		if (optionsCapable == null) {
-			throw new IllegalArgumentException(
-					"Cannot determine database's type as ConnectionFactory is not options-capable. To be "
-							+ "options-capable, a ConnectionFactory should be created with "
-							+ ConnectionFactoryBuilder.class.getName());
-		}
+		Assert.notNull(optionsCapable,
+				() -> "Cannot determine database's type as ConnectionFactory is not options-capable. To be "
+						+ "options-capable, a ConnectionFactory should be created with "
+						+ ConnectionFactoryBuilder.class.getName());
 		ConnectionFactoryOptions options = optionsCapable.getOptions();
 		for (EmbeddedDatabaseConnection candidate : values()) {
 			if (candidate.embedded.test(options)) {

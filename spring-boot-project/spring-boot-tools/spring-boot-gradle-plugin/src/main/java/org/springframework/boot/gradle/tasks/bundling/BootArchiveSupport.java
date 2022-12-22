@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,7 +85,7 @@ class BootArchiveSupport {
 	}
 
 	void configureManifest(Manifest manifest, String mainClass, String classes, String lib, String classPathIndex,
-			String layersIndex) {
+			String layersIndex, String jdkVersion) {
 		Attributes attributes = manifest.getAttributes();
 		attributes.putIfAbsent("Main-Class", this.loaderMainClass);
 		attributes.putIfAbsent("Start-Class", mainClass);
@@ -98,6 +98,7 @@ class BootArchiveSupport {
 		if (layersIndex != null) {
 			attributes.putIfAbsent("Spring-Boot-Layers-Index", layersIndex);
 		}
+		attributes.putIfAbsent("Build-Jdk-Spec", jdkVersion);
 	}
 
 	private String determineSpringBootVersion() {
@@ -105,11 +106,12 @@ class BootArchiveSupport {
 		return (version != null) ? version : "unknown";
 	}
 
-	CopyAction createCopyAction(Jar jar) {
-		return createCopyAction(jar, null, null);
+	CopyAction createCopyAction(Jar jar, ResolvedDependencies resolvedDependencies) {
+		return createCopyAction(jar, resolvedDependencies, null, null);
 	}
 
-	CopyAction createCopyAction(Jar jar, LayerResolver layerResolver, String layerToolsLocation) {
+	CopyAction createCopyAction(Jar jar, ResolvedDependencies resolvedDependencies, LayerResolver layerResolver,
+			String layerToolsLocation) {
 		File output = jar.getArchiveFile().get().getAsFile();
 		Manifest manifest = jar.getManifest();
 		boolean preserveFileTimestamps = jar.isPreserveFileTimestamps();
@@ -122,7 +124,7 @@ class BootArchiveSupport {
 		String encoding = jar.getMetadataCharset();
 		CopyAction action = new BootZipCopyAction(output, manifest, preserveFileTimestamps, includeDefaultLoader,
 				layerToolsLocation, requiresUnpack, exclusions, launchScript, librarySpec, compressionResolver,
-				encoding, layerResolver);
+				encoding, resolvedDependencies, layerResolver);
 		return jar.isReproducibleFileOrder() ? new ReproducibleOrderingCopyAction(action) : action;
 	}
 
@@ -179,10 +181,10 @@ class BootArchiveSupport {
 	}
 
 	void moveModuleInfoToRoot(CopySpec spec) {
-		spec.filesMatching("module-info.class", BootArchiveSupport::moveToRoot);
+		spec.filesMatching("module-info.class", this::moveToRoot);
 	}
 
-	private static void moveToRoot(FileCopyDetails details) {
+	void moveToRoot(FileCopyDetails details) {
 		details.setRelativePath(details.getRelativeSourcePath());
 	}
 

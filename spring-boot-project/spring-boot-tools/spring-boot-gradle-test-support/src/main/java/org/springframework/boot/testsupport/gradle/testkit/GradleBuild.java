@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.boot.testsupport.gradle.testkit;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -28,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.jar.JarFile;
 
 import com.fasterxml.jackson.annotation.JsonView;
@@ -57,6 +59,7 @@ import org.springframework.util.FileCopyUtils;
 import org.springframework.util.FileSystemUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A {@code GradleBuild} is used to run a Gradle build using {@link GradleRunner}.
@@ -80,9 +83,11 @@ public class GradleBuild {
 
 	private GradleVersion expectDeprecationWarnings;
 
+	private final List<String> expectedDeprecationMessages = new ArrayList<>();
+
 	private boolean configurationCache = false;
 
-	private Map<String, String> scriptProperties = new HashMap<>();
+	private final Map<String, String> scriptProperties = new HashMap<>();
 
 	public GradleBuild() {
 		this(Dsl.GROOVY);
@@ -122,7 +127,10 @@ public class GradleBuild {
 				new File(pathOfJarContaining(Versioned.class)),
 				new File(pathOfJarContaining(ParameterNamesModule.class)),
 				new File(pathOfJarContaining(JsonView.class)), new File(pathOfJarContaining(Platform.class)),
-				new File(pathOfJarContaining(Toml.class)), new File(pathOfJarContaining(Lexer.class)));
+				new File(pathOfJarContaining(Toml.class)), new File(pathOfJarContaining(Lexer.class)),
+				new File(pathOfJarContaining("org.graalvm.buildtools.gradle.NativeImagePlugin")),
+				new File(pathOfJarContaining("org.graalvm.reachability.GraalVMReachabilityMetadataRepository")),
+				new File(pathOfJarContaining("org.graalvm.buildtools.utils.SharedConstants")));
 	}
 
 	private String pathOfJarContaining(String className) {
@@ -152,13 +160,27 @@ public class GradleBuild {
 		return this;
 	}
 
+	public GradleBuild expectDeprecationMessages(String... messages) {
+		this.expectedDeprecationMessages.addAll(Arrays.asList(messages));
+		return this;
+	}
+
 	public GradleBuild configurationCache() {
 		this.configurationCache = true;
 		return this;
 	}
 
+	public boolean isConfigurationCache() {
+		return this.configurationCache;
+	}
+
 	public GradleBuild scriptProperty(String key, String value) {
 		this.scriptProperties.put(key, value);
+		return this;
+	}
+
+	public GradleBuild scriptPropertyFrom(File propertiesFile, String key) {
+		this.scriptProperties.put(key, getProperty(propertiesFile, key));
 		return this;
 	}
 
@@ -167,7 +189,13 @@ public class GradleBuild {
 			BuildResult result = prepareRunner(arguments).build();
 			if (this.expectDeprecationWarnings == null || (this.gradleVersion != null
 					&& this.expectDeprecationWarnings.compareTo(GradleVersion.version(this.gradleVersion)) > 0)) {
-				assertThat(result.getOutput()).doesNotContain("Deprecated").doesNotContain("deprecated");
+				String buildOutput = result.getOutput();
+				if (this.expectedDeprecationMessages != null) {
+					for (String message : this.expectedDeprecationMessages) {
+						buildOutput = buildOutput.replaceAll(message, "");
+					}
+				}
+				assertThat(buildOutput).doesNotContainIgnoringCase("deprecated");
 			}
 			return result;
 		}
@@ -186,16 +214,11 @@ public class GradleBuild {
 	}
 
 	public GradleRunner prepareRunner(String... arguments) throws IOException {
-		String scriptContent = FileCopyUtils.copyToString(new FileReader(this.script));
 		this.scriptProperties.put("bootVersion", getBootVersion());
 		this.scriptProperties.put("dependencyManagementPluginVersion", getDependencyManagementPluginVersion());
-		for (Entry<String, String> property : this.scriptProperties.entrySet()) {
-			scriptContent = scriptContent.replace("{" + property.getKey() + "}", property.getValue());
-		}
-		FileCopyUtils.copy(scriptContent, new FileWriter(new File(this.projectDir, "build" + this.dsl.getExtension())));
+		copyTransformedScript(this.script, new File(this.projectDir, "build" + this.dsl.getExtension()));
 		if (this.settings != null) {
-			FileCopyUtils.copy(new FileReader(this.settings),
-					new FileWriter(new File(this.projectDir, "settings.gradle")));
+			copyTransformedScript(this.settings, new File(this.projectDir, "settings.gradle"));
 		}
 		File repository = new File("src/test/resources/repository");
 		if (repository.exists()) {
@@ -221,6 +244,14 @@ public class GradleBuild {
 			allArguments.add("--configuration-cache");
 		}
 		return gradleRunner.withArguments(allArguments);
+	}
+
+	private void copyTransformedScript(String script, File destination) throws IOException {
+		String scriptContent = FileCopyUtils.copyToString(new FileReader(script));
+		for (Entry<String, String> property : this.scriptProperties.entrySet()) {
+			scriptContent = scriptContent.replace("{" + property.getKey() + "}", property.getValue());
+		}
+		FileCopyUtils.copy(scriptContent, new FileWriter(destination));
 	}
 
 	private File getTestKitDir() {
@@ -265,6 +296,25 @@ public class GradleBuild {
 		}
 		catch (Exception ex) {
 			throw new IllegalStateException("Failed to find dependency management plugin version", ex);
+		}
+	}
+
+	private String getProperty(File propertiesFile, String key) {
+		try {
+			assertThat(propertiesFile).withFailMessage("Expecting properties file to exist at path '%s'",
+					propertiesFile.getCanonicalFile()).exists();
+			Properties properties = new Properties();
+			try (FileInputStream input = new FileInputStream(propertiesFile)) {
+				properties.load(input);
+				String value = properties.getProperty(key);
+				assertThat(value).withFailMessage("Expecting properties file '%s' to contain the key '%s'",
+						propertiesFile.getCanonicalFile(), key).isNotEmpty();
+				return value;
+			}
+		}
+		catch (IOException ex) {
+			fail("Error reading properties file '" + propertiesFile + "'");
+			return null;
 		}
 	}
 

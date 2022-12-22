@@ -1,6 +1,7 @@
 plugins {
+	id "base"
 	id "org.jetbrains.kotlin.jvm" apply false // https://youtrack.jetbrains.com/issue/KT-30276
-	id "io.spring.nohttp" version "0.0.6.RELEASE"
+	id "io.spring.nohttp" version "0.0.10"
 }
 
 description = "Spring Boot Build"
@@ -16,7 +17,7 @@ nohttp {
 	source.exclude "spring-boot-project/spring-boot-tools/spring-boot-buildpack-platform/src/test/resources/org/springframework/boot/buildpack/platform/docker/export.tar"
 }
 
-task build {
+check {
 	dependsOn checkstyleNohttp
 }
 
@@ -36,4 +37,8 @@ allprojects {
 	configurations.all {
 		resolutionStrategy.cacheChangingModulesFor 0, "minutes"
 	}
+}
+
+tasks.named("checkstyleNohttp").configure {
+	maxHeapSize = "1g"
 }

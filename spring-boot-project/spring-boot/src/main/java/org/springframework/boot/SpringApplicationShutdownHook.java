@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package org.springframework.boot;
 
-import java.security.AccessControlException;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
@@ -43,6 +42,7 @@ import org.springframework.util.Assert;
  *
  * @author Andy Wilkinson
  * @author Phillip Webb
+ * @author Brian Clozel
  */
 class SpringApplicationShutdownHook implements Runnable {
 
@@ -60,7 +60,7 @@ class SpringApplicationShutdownHook implements Runnable {
 
 	private final ApplicationContextClosedListener contextCloseListener = new ApplicationContextClosedListener();
 
-	private final AtomicBoolean shutdownHookAdded = new AtomicBoolean(false);
+	private final AtomicBoolean shutdownHookAdded = new AtomicBoolean();
 
 	private boolean inProgress;
 
@@ -84,11 +84,13 @@ class SpringApplicationShutdownHook implements Runnable {
 	}
 
 	void addRuntimeShutdownHook() {
-		try {
-			Runtime.getRuntime().addShutdownHook(new Thread(this, "SpringApplicationShutdownHook"));
-		}
-		catch (AccessControlException ex) {
-			// Not allowed in some environments
+		Runtime.getRuntime().addShutdownHook(new Thread(this, "SpringApplicationShutdownHook"));
+	}
+
+	void deregisterFailedApplicationContext(ConfigurableApplicationContext applicationContext) {
+		synchronized (SpringApplicationShutdownHook.class) {
+			Assert.state(!applicationContext.isActive(), "Cannot unregister active application context");
+			SpringApplicationShutdownHook.this.contexts.remove(applicationContext);
 		}
 	}
 

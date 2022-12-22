@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,20 @@ package org.springframework.boot.actuate.autoconfigure.quartz;
 
 import org.quartz.Scheduler;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
+import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
+import org.springframework.boot.actuate.endpoint.SanitizingFunction;
 import org.springframework.boot.actuate.quartz.QuartzEndpoint;
 import org.springframework.boot.actuate.quartz.QuartzEndpointWebExtension;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for {@link QuartzEndpoint}.
@@ -37,24 +40,26 @@ import org.springframework.context.annotation.Configuration;
  * @author Stephane Nicoll
  * @since 2.5.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(after = QuartzAutoConfiguration.class)
 @ConditionalOnClass(Scheduler.class)
-@AutoConfigureAfter(QuartzAutoConfiguration.class)
 @ConditionalOnAvailableEndpoint(endpoint = QuartzEndpoint.class)
+@EnableConfigurationProperties(QuartzEndpointProperties.class)
 public class QuartzEndpointAutoConfiguration {
 
 	@Bean
 	@ConditionalOnBean(Scheduler.class)
 	@ConditionalOnMissingBean
-	public QuartzEndpoint quartzEndpoint(Scheduler scheduler) {
-		return new QuartzEndpoint(scheduler);
+	public QuartzEndpoint quartzEndpoint(Scheduler scheduler, ObjectProvider<SanitizingFunction> sanitizingFunctions) {
+		return new QuartzEndpoint(scheduler, sanitizingFunctions.orderedStream().toList());
 	}
 
 	@Bean
 	@ConditionalOnBean(QuartzEndpoint.class)
 	@ConditionalOnMissingBean
-	public QuartzEndpointWebExtension quartzEndpointWebExtension(QuartzEndpoint endpoint) {
-		return new QuartzEndpointWebExtension(endpoint);
+	@ConditionalOnAvailableEndpoint(exposure = { EndpointExposure.WEB, EndpointExposure.CLOUD_FOUNDRY })
+	public QuartzEndpointWebExtension quartzEndpointWebExtension(QuartzEndpoint endpoint,
+			QuartzEndpointProperties properties) {
+		return new QuartzEndpointWebExtension(endpoint, properties.getShowValues(), properties.getRoles());
 	}
 
 }

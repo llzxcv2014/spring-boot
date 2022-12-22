@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 
 package org.springframework.boot.autoconfigure.web.servlet;
 
-import javax.servlet.Filter;
-import javax.servlet.Servlet;
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import io.undertow.Undertow.Builder;
 import io.undertow.servlet.api.DeploymentInfo;
+import jakarta.servlet.Filter;
+import jakarta.servlet.Servlet;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.apache.catalina.Context;
 import org.apache.catalina.connector.Connector;
 import org.apache.catalina.startup.Tomcat;
@@ -38,6 +37,8 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.ContextConsumer;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.testsupport.web.servlet.DirtiesUrlFactories;
+import org.springframework.boot.testsupport.web.servlet.Servlet5ClassPathOverrides;
 import org.springframework.boot.web.embedded.jetty.JettyServerCustomizer;
 import org.springframework.boot.web.embedded.jetty.JettyServletWebServerFactory;
 import org.springframework.boot.web.embedded.tomcat.TomcatConnectorCustomizer;
@@ -51,7 +52,9 @@ import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext;
+import org.springframework.boot.web.servlet.server.AbstractServletWebServerFactory;
 import org.springframework.boot.web.servlet.server.ConfigurableServletWebServerFactory;
+import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -63,9 +66,8 @@ import org.springframework.web.servlet.FrameworkServlet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link ServletWebServerFactoryAutoConfiguration}.
@@ -76,6 +78,7 @@ import static org.mockito.Mockito.verify;
  * @author Raheela Aslam
  * @author Madhura Bhave
  */
+@DirtiesUrlFactories
 class ServletWebServerFactoryAutoConfigurationTests {
 
 	private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner(
@@ -151,6 +154,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 	}
 
 	@Test
+	@Servlet5ClassPathOverrides
 	void jettyServerCustomizerBeanIsAddedToFactory() {
 		WebApplicationContextRunner runner = new WebApplicationContextRunner(
 				AnnotationConfigServletWebServerApplicationContext::new)
@@ -165,6 +169,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 	}
 
 	@Test
+	@Servlet5ClassPathOverrides
 	void jettyServerCustomizerRegisteredAsBeanAndViaFactoryIsOnlyCalledOnce() {
 		WebApplicationContextRunner runner = new WebApplicationContextRunner(
 				AnnotationConfigServletWebServerApplicationContext::new)
@@ -176,7 +181,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			JettyServletWebServerFactory factory = context.getBean(JettyServletWebServerFactory.class);
 			JettyServerCustomizer customizer = context.getBean("serverCustomizer", JettyServerCustomizer.class);
 			assertThat(factory.getServerCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Server.class));
+			then(customizer).should().customize(any(Server.class));
 		});
 	}
 
@@ -207,7 +212,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			UndertowDeploymentInfoCustomizer customizer = context.getBean("deploymentInfoCustomizer",
 					UndertowDeploymentInfoCustomizer.class);
 			assertThat(factory.getDeploymentInfoCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(DeploymentInfo.class));
+			then(customizer).should().customize(any(DeploymentInfo.class));
 		});
 	}
 
@@ -224,7 +229,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			UndertowBuilderCustomizer customizer = context.getBean("builderCustomizer",
 					UndertowBuilderCustomizer.class);
 			assertThat(factory.getBuilderCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Builder.class));
+			then(customizer).should().customize(any(Builder.class));
 		});
 	}
 
@@ -265,7 +270,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatConnectorCustomizer customizer = context.getBean("connectorCustomizer",
 					TomcatConnectorCustomizer.class);
 			assertThat(factory.getTomcatConnectorCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Connector.class));
+			then(customizer).should().customize(any(Connector.class));
 		});
 	}
 
@@ -281,7 +286,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatConnectorCustomizer customizer = context.getBean("connectorCustomizer",
 					TomcatConnectorCustomizer.class);
 			assertThat(factory.getTomcatConnectorCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Connector.class));
+			then(customizer).should().customize(any(Connector.class));
 		});
 	}
 
@@ -296,7 +301,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatServletWebServerFactory factory = context.getBean(TomcatServletWebServerFactory.class);
 			TomcatContextCustomizer customizer = context.getBean("contextCustomizer", TomcatContextCustomizer.class);
 			assertThat(factory.getTomcatContextCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Context.class));
+			then(customizer).should().customize(any(Context.class));
 		});
 	}
 
@@ -311,7 +316,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatServletWebServerFactory factory = context.getBean(TomcatServletWebServerFactory.class);
 			TomcatContextCustomizer customizer = context.getBean("contextCustomizer", TomcatContextCustomizer.class);
 			assertThat(factory.getTomcatContextCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any(Context.class));
+			then(customizer).should().customize(any(Context.class));
 		});
 	}
 
@@ -327,7 +332,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatProtocolHandlerCustomizer<?> customizer = context.getBean("protocolHandlerCustomizer",
 					TomcatProtocolHandlerCustomizer.class);
 			assertThat(factory.getTomcatProtocolHandlerCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any());
+			then(customizer).should().customize(any());
 		});
 	}
 
@@ -343,7 +348,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			TomcatProtocolHandlerCustomizer<?> customizer = context.getBean("protocolHandlerCustomizer",
 					TomcatProtocolHandlerCustomizer.class);
 			assertThat(factory.getTomcatProtocolHandlerCustomizers()).contains(customizer);
-			verify(customizer, times(1)).customize(any());
+			then(customizer).should().customize(any());
 		});
 	}
 
@@ -353,6 +358,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 			assertThat(context).hasSingleBean(FilterRegistrationBean.class);
 			Filter filter = context.getBean(FilterRegistrationBean.class).getFilter();
 			assertThat(filter).isInstanceOf(ForwardedHeaderFilter.class);
+			assertThat(filter).extracting("relativeRedirects").isEqualTo(false);
 		});
 	}
 
@@ -369,6 +375,56 @@ class ServletWebServerFactoryAutoConfigurationTests {
 				.run((context) -> assertThat(context).hasSingleBean(FilterRegistrationBean.class));
 	}
 
+	@Test
+	void cookieSameSiteSuppliersAreApplied() {
+		this.contextRunner.withUserConfiguration(CookieSameSiteSupplierConfiguration.class).run((context) -> {
+			AbstractServletWebServerFactory webServerFactory = context.getBean(AbstractServletWebServerFactory.class);
+			assertThat(webServerFactory.getCookieSameSiteSuppliers()).hasSize(2);
+		});
+	}
+
+	@Test
+	void relativeRedirectsShouldBeEnabledWhenUsingTomcatContainerAndUseRelativeRedirects() {
+		WebApplicationContextRunner runner = new WebApplicationContextRunner(
+				AnnotationConfigServletWebServerApplicationContext::new)
+						.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class))
+						.withPropertyValues("server.forward-headers-strategy=framework",
+								"server.tomcat.use-relative-redirects=true", "server.port=0");
+		runner.run((context) -> {
+			Filter filter = context.getBean(FilterRegistrationBean.class).getFilter();
+			assertThat(filter).isInstanceOf(ForwardedHeaderFilter.class);
+			assertThat(filter).extracting("relativeRedirects").isEqualTo(true);
+		});
+	}
+
+	@Test
+	void relativeRedirectsShouldNotBeEnabledWhenUsingTomcatContainerAndNotUsingRelativeRedirects() {
+		WebApplicationContextRunner runner = new WebApplicationContextRunner(
+				AnnotationConfigServletWebServerApplicationContext::new)
+						.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class))
+						.withPropertyValues("server.forward-headers-strategy=framework",
+								"server.tomcat.use-relative-redirects=false", "server.port=0");
+		runner.run((context) -> {
+			Filter filter = context.getBean(FilterRegistrationBean.class).getFilter();
+			assertThat(filter).isInstanceOf(ForwardedHeaderFilter.class);
+			assertThat(filter).extracting("relativeRedirects").isEqualTo(false);
+		});
+	}
+
+	@Test
+	void relativeRedirectsShouldNotBeEnabledWhenNotUsingTomcatContainer() {
+		WebApplicationContextRunner runner = new WebApplicationContextRunner(
+				AnnotationConfigServletWebServerApplicationContext::new)
+						.withClassLoader(new FilteredClassLoader(Tomcat.class, Server.class))
+						.withConfiguration(AutoConfigurations.of(ServletWebServerFactoryAutoConfiguration.class))
+						.withPropertyValues("server.forward-headers-strategy=framework", "server.port=0");
+		runner.run((context) -> {
+			Filter filter = context.getBean(FilterRegistrationBean.class).getFilter();
+			assertThat(filter).isInstanceOf(ForwardedHeaderFilter.class);
+			assertThat(filter).extracting("relativeRedirects").isEqualTo(false);
+		});
+	}
+
 	private ContextConsumer<AssertableWebApplicationContext> verifyContext() {
 		return this::verifyContext;
 	}
@@ -377,7 +433,7 @@ class ServletWebServerFactoryAutoConfigurationTests {
 		MockServletWebServerFactory factory = context.getBean(MockServletWebServerFactory.class);
 		Servlet servlet = context.getBean(DispatcherServletAutoConfiguration.DEFAULT_DISPATCHER_SERVLET_BEAN_NAME,
 				Servlet.class);
-		verify(factory.getServletContext()).addServlet("dispatcherServlet", servlet);
+		then(factory.getServletContext()).should().addServlet("dispatcherServlet", servlet);
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -652,6 +708,21 @@ class ServletWebServerFactoryAutoConfigurationTests {
 		FilterRegistrationBean<ForwardedHeaderFilter> testForwardedHeaderFilter() {
 			ForwardedHeaderFilter filter = new ForwardedHeaderFilter();
 			return new FilterRegistrationBean<>(filter);
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class CookieSameSiteSupplierConfiguration {
+
+		@Bean
+		CookieSameSiteSupplier cookieSameSiteSupplier1() {
+			return CookieSameSiteSupplier.ofLax().whenHasName("test1");
+		}
+
+		@Bean
+		CookieSameSiteSupplier cookieSameSiteSupplier2() {
+			return CookieSameSiteSupplier.ofNone().whenHasName("test2");
 		}
 
 	}

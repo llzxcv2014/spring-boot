@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,13 +130,25 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			if (!matchResult.isAllMatched()) {
 				return ConditionOutcome.noMatch(spec.message().didNotFind("any beans").atAll());
 			}
-			else if (!hasSingleAutowireCandidate(context.getBeanFactory(), matchResult.getNamesOfAllMatches(),
-					spec.getStrategy() == SearchStrategy.ALL)) {
-				return ConditionOutcome.noMatch(spec.message().didNotFind("a primary bean from beans")
-						.items(Style.QUOTE, matchResult.getNamesOfAllMatches()));
+			Set<String> allBeans = matchResult.getNamesOfAllMatches();
+			if (allBeans.size() == 1) {
+				matchMessage = spec.message(matchMessage).found("a single bean").items(Style.QUOTE, allBeans);
 			}
-			matchMessage = spec.message(matchMessage).found("a primary bean from beans").items(Style.QUOTE,
-					matchResult.getNamesOfAllMatches());
+			else {
+				List<String> primaryBeans = getPrimaryBeans(context.getBeanFactory(), allBeans,
+						spec.getStrategy() == SearchStrategy.ALL);
+				if (primaryBeans.isEmpty()) {
+					return ConditionOutcome.noMatch(
+							spec.message().didNotFind("a primary bean from beans").items(Style.QUOTE, allBeans));
+				}
+				if (primaryBeans.size() > 1) {
+					return ConditionOutcome
+							.noMatch(spec.message().found("multiple primary beans").items(Style.QUOTE, primaryBeans));
+				}
+				matchMessage = spec.message(matchMessage)
+						.found("a single primary bean '" + primaryBeans.get(0) + "' from beans")
+						.items(Style.QUOTE, allBeans);
+			}
 		}
 		if (metadata.isAnnotated(ConditionalOnMissingBean.class.getName())) {
 			Spec<ConditionalOnMissingBean> spec = new Spec<>(context, metadata, annotations,
@@ -240,11 +252,11 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			ResolvableType generic = ResolvableType.forClassWithGenerics(container, type);
 			result = addAll(result, beanFactory.getBeanNamesForType(generic, true, false));
 		}
-		if (considerHierarchy && beanFactory instanceof HierarchicalBeanFactory) {
-			BeanFactory parent = ((HierarchicalBeanFactory) beanFactory).getParentBeanFactory();
-			if (parent instanceof ListableBeanFactory) {
-				result = collectBeanNamesForType((ListableBeanFactory) parent, considerHierarchy, type,
-						parameterizedContainers, result);
+		if (considerHierarchy && beanFactory instanceof HierarchicalBeanFactory hierarchicalBeanFactory) {
+			BeanFactory parent = hierarchicalBeanFactory.getParentBeanFactory();
+			if (parent instanceof ListableBeanFactory listableBeanFactory) {
+				result = collectBeanNamesForType(listableBeanFactory, considerHierarchy, type, parameterizedContainers,
+						result);
 			}
 		}
 		return result;
@@ -274,9 +286,8 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		result = addAll(result, beanFactory.getBeanNamesForAnnotation(annotationType));
 		if (considerHierarchy) {
 			BeanFactory parent = ((HierarchicalBeanFactory) beanFactory).getParentBeanFactory();
-			if (parent instanceof ListableBeanFactory) {
-				result = collectBeanNamesForAnnotation((ListableBeanFactory) parent, annotationType, considerHierarchy,
-						result);
+			if (parent instanceof ListableBeanFactory listableBeanFactory) {
+				result = collectBeanNamesForAnnotation(listableBeanFactory, annotationType, considerHierarchy, result);
 			}
 		}
 		return result;
@@ -341,11 +352,6 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		}
 	}
 
-	private boolean hasSingleAutowireCandidate(ConfigurableListableBeanFactory beanFactory, Set<String> beanNames,
-			boolean considerHierarchy) {
-		return (beanNames.size() == 1 || getPrimaryBeans(beanFactory, beanNames, considerHierarchy).size() == 1);
-	}
-
 	private List<String> getPrimaryBeans(ConfigurableListableBeanFactory beanFactory, Set<String> beanNames,
 			boolean considerHierarchy) {
 		List<String> primaryBeans = new ArrayList<>();
@@ -363,9 +369,9 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		if (beanFactory.containsBeanDefinition(beanName)) {
 			return beanFactory.getBeanDefinition(beanName);
 		}
-		if (considerHierarchy && beanFactory.getParentBeanFactory() instanceof ConfigurableListableBeanFactory) {
-			return findBeanDefinition(((ConfigurableListableBeanFactory) beanFactory.getParentBeanFactory()), beanName,
-					considerHierarchy);
+		if (considerHierarchy
+				&& beanFactory.getParentBeanFactory() instanceof ConfigurableListableBeanFactory listableBeanFactory) {
+			return findBeanDefinition(listableBeanFactory, beanName, considerHierarchy);
 		}
 		return null;
 	}
@@ -448,11 +454,11 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			for (String attributeName : attributeNames) {
 				List<Object> values = attributes.getOrDefault(attributeName, Collections.emptyList());
 				for (Object value : values) {
-					if (value instanceof String[]) {
-						merge(result, (String[]) value);
+					if (value instanceof String[] stringArray) {
+						merge(result, stringArray);
 					}
-					else if (value instanceof String) {
-						merge(result, (String) value);
+					else if (value instanceof String string) {
+						merge(result, string);
 					}
 				}
 			}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.boot.build.testing;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 
 import org.gradle.api.services.BuildService;
 import org.gradle.api.services.BuildServiceParameters;
@@ -29,8 +28,7 @@ import org.gradle.tooling.events.FinishEvent;
 import org.gradle.tooling.events.OperationCompletionListener;
 
 /**
- * {@link BuildService} that provides an overview of all of the test failures in the
- * build.
+ * {@link BuildService} that provides an overview of all the test failures in the build.
  *
  * @author Andy Wilkinson
  */
@@ -43,8 +41,7 @@ public abstract class TestResultsOverview
 	private final Object monitor = new Object();
 
 	void addFailures(Test test, List<TestDescriptor> failureDescriptors) {
-		List<TestFailure> testFailures = failureDescriptors.stream().map(TestFailure::new).sorted()
-				.collect(Collectors.toList());
+		List<TestFailure> testFailures = failureDescriptors.stream().map(TestFailure::new).sorted().toList();
 		synchronized (this.monitor) {
 			this.testFailures.put(test, testFailures);
 		}

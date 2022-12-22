@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,12 +96,11 @@ class CustomHibernateJpaAutoConfigurationTests {
 
 	@Test
 	void defaultDatabaseIsSet() {
-		this.contextRunner.withPropertyValues("spring.datasource.url:jdbc:h2:mem:testdb",
-				"spring.datasource.initialization-mode:never").run((context) -> {
-					HibernateJpaVendorAdapter bean = context.getBean(HibernateJpaVendorAdapter.class);
-					Database database = (Database) ReflectionTestUtils.getField(bean, "database");
-					assertThat(database).isEqualTo(Database.DEFAULT);
-				});
+		this.contextRunner.withPropertyValues("spring.datasource.url:jdbc:h2:mem:testdb").run((context) -> {
+			HibernateJpaVendorAdapter bean = context.getBean(HibernateJpaVendorAdapter.class);
+			Database database = (Database) ReflectionTestUtils.getField(bean, "database");
+			assertThat(database).isEqualTo(Database.DEFAULT);
+		});
 	}
 
 	@Configuration(proxyBeanMethods = false)

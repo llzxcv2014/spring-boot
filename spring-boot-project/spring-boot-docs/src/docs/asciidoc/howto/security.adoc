@@ -8,14 +8,14 @@ For more about Spring Security, see the {spring-security}[Spring Security projec
 
 [[howto.security.switch-off-spring-boot-configuration]]
 === Switch off the Spring Boot Security Configuration
-If you define a `@Configuration` with a `WebSecurityConfigurerAdapter` or a `SecurityFilterChain` bean in your application, it switches off the default webapp security settings in Spring Boot.
+If you define a `@Configuration` with a `SecurityFilterChain` bean in your application, it switches off the default webapp security settings in Spring Boot.
 
 
 
 [[howto.security.change-user-details-service-and-add-user-accounts]]
 === Change the UserDetailsService and Add User Accounts
 If you provide a `@Bean` of type `AuthenticationManager`, `AuthenticationProvider`, or `UserDetailsService`, the default `@Bean` for `InMemoryUserDetailsManager` is not created.
-This means you have the full feature set of Spring Security available (such as {spring-security-docs}#servlet-authentication[various authentication options]).
+This means you have the full feature set of Spring Security available (such as {spring-security-docs}/servlet/authentication/index.html[various authentication options]).
 
 The easiest way to add user accounts is to provide your own `UserDetailsService` bean.
 
@@ -42,7 +42,4 @@ Alternatively, you can add the `RemoteIpValve` by customizing the `TomcatServlet
 
 To configure Spring Security to require a secure channel for all (or some) requests, consider adding your own `SecurityFilterChain` bean that adds the following `HttpSecurity` configuration:
 
-[source,java,indent=0,subs="verbatim"]
-----
-include::{docs-java}/howto/security/enablehttps/MySecurityConfig.java[]
-----
+include::code:MySecurityConfig[]

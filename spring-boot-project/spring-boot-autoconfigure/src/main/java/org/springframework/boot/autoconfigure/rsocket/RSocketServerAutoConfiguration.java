@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,13 @@
 
 package org.springframework.boot.autoconfigure.rsocket;
 
-import java.util.stream.Collectors;
-
 import io.rsocket.core.RSocketServer;
 import io.rsocket.frame.decoder.PayloadDecoder;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import reactor.netty.http.server.HttpServer;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.AllNestedConditions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -56,10 +54,9 @@ import org.springframework.messaging.rsocket.annotation.support.RSocketMessageHa
  * @author Brian Clozel
  * @since 2.2.0
  */
-@Configuration(proxyBeanMethods = false)
+@AutoConfiguration(after = RSocketStrategiesAutoConfiguration.class)
 @ConditionalOnClass({ RSocketServer.class, RSocketStrategies.class, HttpServer.class, TcpServerTransport.class })
 @ConditionalOnBean(RSocketMessageHandler.class)
-@AutoConfigureAfter(RSocketStrategiesAutoConfiguration.class)
 @EnableConfigurationProperties(RSocketProperties.class)
 public class RSocketServerAutoConfiguration {
 
@@ -100,7 +97,7 @@ public class RSocketServerAutoConfiguration {
 			map.from(properties.getServer().getPort()).to(factory::setPort);
 			map.from(properties.getServer().getFragmentSize()).to(factory::setFragmentSize);
 			map.from(properties.getServer().getSsl()).to(factory::setSsl);
-			factory.setRSocketServerCustomizers(customizers.orderedStream().collect(Collectors.toList()));
+			factory.setRSocketServerCustomizers(customizers.orderedStream().toList());
 			return factory;
 		}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,7 @@
 
 package org.springframework.boot.web.embedded.tomcat;
 
-import java.io.IOException;
 import java.net.ConnectException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
@@ -48,16 +45,15 @@ import org.springframework.boot.web.server.PortInUseException;
 import org.springframework.boot.web.server.Shutdown;
 import org.springframework.boot.web.server.WebServerException;
 import org.springframework.http.server.reactive.HttpHandler;
-import org.springframework.util.SocketUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
  * Tests for {@link TomcatReactiveWebServerFactory}.
@@ -83,7 +79,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		this.webServer = factory.getWebServer(mock(HttpHandler.class));
 		InOrder ordered = inOrder((Object[]) customizers);
 		for (TomcatContextCustomizer customizer : customizers) {
-			ordered.verify(customizer).customize(any(Context.class));
+			then(customizer).should(ordered).customize(any(Context.class));
 		}
 	}
 
@@ -94,7 +90,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		factory.addContextCustomizers(customizer);
 		this.webServer = factory.getWebServer(mock(HttpHandler.class));
 		ArgumentCaptor<Context> contextCaptor = ArgumentCaptor.forClass(Context.class);
-		verify(customizer).customize(contextCaptor.capture());
+		then(customizer).should().customize(contextCaptor.capture());
 		assertThat(contextCaptor.getValue().getParent()).isNotNull();
 	}
 
@@ -102,8 +98,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 	void defaultTomcatListeners() {
 		TomcatReactiveWebServerFactory factory = getFactory();
 		if (AprLifecycleListener.isAprAvailable()) {
-			assertThat(factory.getContextLifecycleListeners()).hasSize(1).first()
-					.isInstanceOf(AprLifecycleListener.class);
+			assertThat(factory.getContextLifecycleListeners()).singleElement().isInstanceOf(AprLifecycleListener.class);
 		}
 		else {
 			assertThat(factory.getContextLifecycleListeners()).isEmpty();
@@ -120,7 +115,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		this.webServer = factory.getWebServer(mock(HttpHandler.class));
 		InOrder ordered = inOrder((Object[]) listeners);
 		for (LifecycleListener listener : listeners) {
-			ordered.verify(listener).lifecycleEvent(any(LifecycleEvent.class));
+			then(listener).should(ordered).lifecycleEvent(any(LifecycleEvent.class));
 		}
 	}
 
@@ -165,7 +160,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		this.webServer = factory.getWebServer(handler);
 		InOrder ordered = inOrder((Object[]) customizers);
 		for (TomcatConnectorCustomizer customizer : customizers) {
-			ordered.verify(customizer).customize(any(Connector.class));
+			then(customizer).should(ordered).customize(any(Connector.class));
 		}
 	}
 
@@ -181,7 +176,7 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		this.webServer = factory.getWebServer(handler);
 		InOrder ordered = inOrder((Object[]) customizers);
 		for (TomcatProtocolHandlerCustomizer customizer : customizers) {
-			ordered.verify(customizer).customize(any(ProtocolHandler.class));
+			then(customizer).should(ordered).customize(any(ProtocolHandler.class));
 		}
 	}
 
@@ -225,15 +220,13 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 	}
 
 	@Test
-	void portClashOfPrimaryConnectorResultsInPortInUseException() throws IOException {
-		doWithBlockedPort((port) -> {
-			assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
-				AbstractReactiveWebServerFactory factory = getFactory();
-				factory.setPort(port);
-				this.webServer = factory.getWebServer(mock(HttpHandler.class));
-				this.webServer.start();
-			}).satisfies((ex) -> handleExceptionCausedByBlockedPortOnPrimaryConnector(ex, port));
-		});
+	void portClashOfPrimaryConnectorResultsInPortInUseException() throws Exception {
+		doWithBlockedPort((port) -> assertThatExceptionOfType(RuntimeException.class).isThrownBy(() -> {
+			AbstractReactiveWebServerFactory factory = getFactory();
+			factory.setPort(port);
+			this.webServer = factory.getWebServer(mock(HttpHandler.class));
+			this.webServer.start();
+		}).satisfies((ex) -> handleExceptionCausedByBlockedPortOnPrimaryConnector(ex, port)));
 	}
 
 	@Override
@@ -279,34 +272,9 @@ class TomcatReactiveWebServerFactoryTests extends AbstractReactiveWebServerFacto
 		assertThat(webServerReference).hasValue(webServer);
 	}
 
-	private void doWithBlockedPort(BlockedPortAction action) throws IOException {
-		int port = SocketUtils.findAvailableTcpPort(40000);
-		ServerSocket serverSocket = new ServerSocket();
-		for (int i = 0; i < 10; i++) {
-			try {
-				serverSocket.bind(new InetSocketAddress(port));
-				break;
-			}
-			catch (Exception ex) {
-			}
-		}
-		try {
-			action.run(port);
-		}
-		finally {
-			serverSocket.close();
-		}
-	}
-
 	private void handleExceptionCausedByBlockedPortOnPrimaryConnector(RuntimeException ex, int blockedPort) {
 		assertThat(ex).isInstanceOf(PortInUseException.class);
 		assertThat(((PortInUseException) ex).getPort()).isEqualTo(blockedPort);
-	}
-
-	interface BlockedPortAction {
-
-		void run(int port);
-
 	}
 
 }

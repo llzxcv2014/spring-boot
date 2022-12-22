@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 package org.springframework.boot.actuate.autoconfigure.endpoint.web.documentation;
 
+import java.io.File;
 import java.io.FileWriter;
+import java.nio.file.Files;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -66,7 +68,11 @@ class HeapDumpWebEndpointDocumentationTests extends MockMvcEndpointDocumentation
 
 				@Override
 				protected HeapDumper createHeapDumper() {
-					return (file, live) -> FileCopyUtils.copy("<<binary content>>", new FileWriter(file));
+					return (live) -> {
+						File file = Files.createTempFile("heap-", ".hprof").toFile();
+						FileCopyUtils.copy("<<binary content>>", new FileWriter(file));
+						return file;
+					};
 				}
 
 			};

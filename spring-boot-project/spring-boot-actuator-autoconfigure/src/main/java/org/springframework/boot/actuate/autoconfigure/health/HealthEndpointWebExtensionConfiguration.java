@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.model.Resource;
 import org.glassfish.jersey.servlet.ServletContainer;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
+import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
 import org.springframework.boot.actuate.endpoint.web.EndpointMapping;
 import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.WebEndpointsSupplier;
@@ -63,14 +64,16 @@ import org.springframework.web.servlet.DispatcherServlet;
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = Type.SERVLET)
 @ConditionalOnBean(HealthEndpoint.class)
+@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class,
+		exposure = { EndpointExposure.WEB, EndpointExposure.CLOUD_FOUNDRY })
 class HealthEndpointWebExtensionConfiguration {
 
 	@Bean
-	@ConditionalOnBean(HealthEndpoint.class)
 	@ConditionalOnMissingBean
 	HealthEndpointWebExtension healthEndpointWebExtension(HealthContributorRegistry healthContributorRegistry,
-			HealthEndpointGroups groups) {
-		return new HealthEndpointWebExtension(healthContributorRegistry, groups);
+			HealthEndpointGroups groups, HealthEndpointProperties properties) {
+		return new HealthEndpointWebExtension(healthContributorRegistry, groups,
+				properties.getLogging().getSlowIndicatorThreshold());
 	}
 
 	private static ExposableWebEndpoint getHealthEndpoint(WebEndpointsSupplier webEndpointsSupplier) {
@@ -79,8 +82,8 @@ class HealthEndpointWebExtensionConfiguration {
 				.findFirst().get();
 	}
 
-	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnBean(DispatcherServlet.class)
+	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class, exposure = EndpointExposure.WEB)
 	static class MvcAdditionalHealthEndpointPathsConfiguration {
 
 		@Bean
@@ -96,6 +99,7 @@ class HealthEndpointWebExtensionConfiguration {
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnClass(ResourceConfig.class)
 	@ConditionalOnMissingClass("org.springframework.web.servlet.DispatcherServlet")
+	@ConditionalOnAvailableEndpoint(endpoint = HealthEndpoint.class, exposure = EndpointExposure.WEB)
 	static class JerseyAdditionalHealthEndpointPathsConfiguration {
 
 		@Bean
@@ -157,7 +161,7 @@ class HealthEndpointWebExtensionConfiguration {
 					WebServerNamespace.SERVER, this.groups);
 			Collection<Resource> endpointResources = resourceFactory
 					.createEndpointResources(mapping, Collections.singletonList(this.endpoint), null, null, false)
-					.stream().filter(Objects::nonNull).collect(Collectors.toList());
+					.stream().filter(Objects::nonNull).toList();
 			register(endpointResources, config);
 		}
 

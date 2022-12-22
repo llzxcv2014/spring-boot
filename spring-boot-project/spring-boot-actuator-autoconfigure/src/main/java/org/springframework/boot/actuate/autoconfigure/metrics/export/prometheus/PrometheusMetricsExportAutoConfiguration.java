@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2020 the original author or authors.
+ * Copyright 2012-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,13 @@ import io.micrometer.core.instrument.Clock;
 import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.exemplars.DefaultExemplarSampler;
+import io.prometheus.client.exemplars.ExemplarSampler;
+import io.prometheus.client.exemplars.tracer.common.SpanContextSupplier;
 import io.prometheus.client.exporter.BasicAuthHttpConnectionFactory;
 import io.prometheus.client.exporter.PushGateway;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.autoconfigure.endpoint.condition.ConditionalOnAvailableEndpoint;
 import org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
@@ -38,8 +40,7 @@ import org.springframework.boot.actuate.autoconfigure.metrics.export.simple.Simp
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager;
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusPushGatewayManager.ShutdownOperation;
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusScrapeEndpoint;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -49,19 +50,19 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.core.log.LogMessage;
 import org.springframework.util.StringUtils;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for exporting metrics to Prometheus.
  *
- * @since 2.0.0
  * @author Jon Schneider
  * @author David J. M. Karlsen
+ * @author Jonatan Ivanov
+ * @since 2.0.0
  */
-@Configuration(proxyBeanMethods = false)
-@AutoConfigureBefore({ CompositeMeterRegistryAutoConfiguration.class, SimpleMetricsExportAutoConfiguration.class })
-@AutoConfigureAfter(MetricsAutoConfiguration.class)
+@AutoConfiguration(
+		before = { CompositeMeterRegistryAutoConfiguration.class, SimpleMetricsExportAutoConfiguration.class },
+		after = MetricsAutoConfiguration.class)
 @ConditionalOnBean(Clock.class)
 @ConditionalOnClass(PrometheusMeterRegistry.class)
 @ConditionalOnEnabledMetricsExport("prometheus")
@@ -77,14 +78,22 @@ public class PrometheusMetricsExportAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean
 	public PrometheusMeterRegistry prometheusMeterRegistry(PrometheusConfig prometheusConfig,
-			CollectorRegistry collectorRegistry, Clock clock) {
-		return new PrometheusMeterRegistry(prometheusConfig, collectorRegistry, clock);
+			CollectorRegistry collectorRegistry, Clock clock, ObjectProvider<ExemplarSampler> exemplarSamplerProvider) {
+		return new PrometheusMeterRegistry(prometheusConfig, collectorRegistry, clock,
+				exemplarSamplerProvider.getIfAvailable());
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
 	public CollectorRegistry collectorRegistry() {
 		return new CollectorRegistry(true);
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	@ConditionalOnBean(SpanContextSupplier.class)
+	public DefaultExemplarSampler exemplarSampler(SpanContextSupplier spanContextSupplier) {
+		return new DefaultExemplarSampler(spanContextSupplier);
 	}
 
 	@Configuration(proxyBeanMethods = false)
@@ -105,10 +114,8 @@ public class PrometheusMetricsExportAutoConfiguration {
 	 */
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnClass(PushGateway.class)
-	@ConditionalOnProperty(prefix = "management.metrics.export.prometheus.pushgateway", name = "enabled")
+	@ConditionalOnProperty(prefix = "management.prometheus.metrics.export.pushgateway", name = "enabled")
 	public static class PrometheusPushGatewayConfiguration {
-
-		private static final Log logger = LogFactory.getLog(PrometheusPushGatewayConfiguration.class);
 
 		/**
 		 * The fallback job name. We use 'spring' since there's a history of Prometheus
@@ -120,7 +127,7 @@ public class PrometheusMetricsExportAutoConfiguration {
 		@Bean
 		@ConditionalOnMissingBean
 		public PrometheusPushGatewayManager prometheusPushGatewayManager(CollectorRegistry collectorRegistry,
-				PrometheusProperties prometheusProperties, Environment environment) {
+				PrometheusProperties prometheusProperties, Environment environment) throws MalformedURLException {
 			PrometheusProperties.Pushgateway properties = prometheusProperties.getPushgateway();
 			Duration pushRate = properties.getPushRate();
 			String job = getJob(properties, environment);
@@ -135,15 +142,8 @@ public class PrometheusMetricsExportAutoConfiguration {
 					shutdownOperation);
 		}
 
-		private PushGateway initializePushGateway(String url) {
-			try {
-				return new PushGateway(new URL(url));
-			}
-			catch (MalformedURLException ex) {
-				logger.warn(LogMessage
-						.format("Invalid PushGateway base url '%s': update your configuration to a valid URL", url));
-				return new PushGateway(url);
-			}
+		private PushGateway initializePushGateway(String url) throws MalformedURLException {
+			return new PushGateway(new URL(url));
 		}
 
 		private String getJob(PrometheusProperties.Pushgateway properties, Environment environment) {
